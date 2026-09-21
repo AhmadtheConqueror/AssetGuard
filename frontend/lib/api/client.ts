@@ -1,5 +1,8 @@
 import type {
   Alert,
+  AlertCreateInput,
+  AlertResolveInput,
+  AlertUpdateInput,
   AIAnalysis,
   Asset,
   HealthResponse,
@@ -69,4 +72,51 @@ export function getAIAnalyses(assetId: string) {
 
 export function getLatestAIAnalysis(assetId: string) {
   return getJson<AIAnalysis>(`/api/assets/${assetId}/ai-analyses/latest`);
+}
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+async function requestJson<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
+  const response = await fetch(getApiUrl(path), {
+    method,
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    let detail = `Request failed with status ${response.status}`;
+    try {
+      const errorBody = await response.json() as { detail?: string };
+      if (errorBody.detail) detail = errorBody.detail;
+    } catch {
+      // Keep the status-based message when the server does not return JSON.
+    }
+    throw new ApiError(response.status, detail);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+export function createAlert(assetId: string, input: AlertCreateInput) {
+  return requestJson<Alert>(`/api/assets/${assetId}/alerts`, "POST", input);
+}
+
+export function updateAlert(alertId: string, input: AlertUpdateInput) {
+  return requestJson<Alert>(`/api/alerts/${alertId}`, "PATCH", input);
+}
+
+export function acknowledgeAlert(alertId: string) {
+  return requestJson<Alert>(`/api/alerts/${alertId}/acknowledge`, "POST", {});
+}
+
+export function resolveAlert(alertId: string, input: AlertResolveInput) {
+  return requestJson<Alert>(`/api/alerts/${alertId}/resolve`, "POST", input);
 }

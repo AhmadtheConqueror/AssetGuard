@@ -72,6 +72,23 @@ export interface Alert {
   updated_at: string;
 }
 
+export interface AlertCreateInput {
+  title: string;
+  description?: string;
+  severity: Alert["severity"];
+}
+
+export interface AlertUpdateInput {
+  title?: string;
+  description?: string;
+  severity?: Alert["severity"];
+  engineer_notes?: string;
+}
+
+export interface AlertResolveInput {
+  engineer_notes?: string;
+}
+
 export type MaintenanceStatus = "planned" | "in_progress" | "completed" | "cancelled";
 
 export interface MaintenanceRecord {

@@ -12,6 +12,7 @@ import {
   getSensors,
 } from "@/lib/api/client";
 import { formatDateTime, formatValue, TrendChart } from "@/components/OperationalDashboard";
+import { AlertList } from "@/components/AlertWorkflow";
 import type {
   AIAnalysis,
   Alert,
@@ -107,8 +108,8 @@ function AISection({ state, analyses }: { state: LoadState; analyses: AIAnalysis
   return <section id="ai-analysis" className="detail-section-block" aria-labelledby="ai-title"><div className="detail-section-heading"><div><p className="section-kicker">Passive record</p><h3 id="ai-title">AI Analysis</h3></div><span className="detail-section-meta">Read only</span></div>{state === "loading" && <SectionState title="Loading analysis history" detail="Checking for previously stored analyses." />}{state === "error" && <SectionState title="Analysis history unavailable" detail="The AI analysis history could not be retrieved." error />}{state === "ready" && analyses.length === 0 && <SectionState title="No AI analysis available yet." detail="Analysis invocation is intentionally not available in this phase." />}{state === "ready" && analyses.length > 0 && <div className="analysis-list">{analyses.map((analysis) => <article className="analysis-card" key={analysis.id}><div className="analysis-card-header"><div><span>{formatDateTime(analysis.analyzed_at)}</span><h4>{analysis.risk_level ?? "Recorded analysis"}</h4></div>{analysis.risk_score !== null && <strong>{analysis.risk_score.toFixed(2)}</strong>}</div><p className="analysis-summary">{analysis.summary}</p><div className="analysis-facts"><span>Anomaly detected <b>{analysis.anomaly_detected ? "Yes" : "No"}</b></span>{analysis.model_provider && <span>Provider <b>{analysis.model_provider}</b></span>}{analysis.model_name && <span>Model <b>{analysis.model_name}</b></span>}</div><ValueList value={analysis.findings} /><ValueList value={analysis.recommended_actions} /></article>)}</div>}</section>;
 }
 
-function AlertsSection({ state, alerts }: { state: LoadState; alerts: Alert[] }) {
-  return <section id="alerts" className="detail-section-block" aria-labelledby="alerts-title"><div className="detail-section-heading"><div><p className="section-kicker">Signal history</p><h3 id="alerts-title">Alerts</h3></div><span className="detail-section-meta">{alerts.length} recorded</span></div>{state === "loading" && <SectionState title="Loading alert history" detail="Fetching alerts for this asset." />}{state === "error" && <SectionState title="Alerts unavailable" detail="The alert history could not be retrieved." error />}{state === "ready" && alerts.length === 0 && <SectionState title="No alerts recorded for this asset." detail="There are no alert records to review." />}{state === "ready" && alerts.length > 0 && <div className="record-list">{alerts.map((alert) => <article className="record-card" key={alert.id}><div className="record-card-heading"><h4>{alert.title}</h4><div><StatusBadge value={alert.severity} kind="severity" /><StatusBadge value={alert.status} /></div></div><p>{alert.description || "No description provided."}</p><dl className="record-details"><div><dt>Detected</dt><dd>{formatDateTime(alert.detected_at)}</dd></div>{alert.engineer_notes && <div><dt>Engineer notes</dt><dd>{alert.engineer_notes}</dd></div>}</dl></article>)}</div>}</section>;
+function AlertsSection({ state, alerts, asset, onAlertChange }: { state: LoadState; alerts: Alert[]; asset: Asset; onAlertChange: (alert: Alert) => void }) {
+  return <section id="alerts" className="detail-section-block" aria-labelledby="alerts-title"><div className="detail-section-heading"><div><p className="section-kicker">Signal history</p><h3 id="alerts-title">Alerts</h3></div><span className="detail-section-meta">{alerts.length} recorded</span></div>{state === "loading" && <SectionState title="Loading alert history" detail="Fetching alerts for this asset." />}{state === "error" && <SectionState title="Alerts unavailable" detail="The alert history could not be retrieved." error />}{state === "ready" && alerts.length === 0 && <SectionState title="No alerts recorded for this asset." detail="There are no alert records to review." />}{state === "ready" && alerts.length > 0 && <AlertList alerts={alerts} assets={[asset]} showAsset={false} onAlertChange={onAlertChange} />}</section>;
 }
 
 function MaintenanceSection({ state, records }: { state: LoadState; records: MaintenanceRecord[] }) {
@@ -120,6 +121,10 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   const [assetState, setAssetState] = useState<LoadState>("loading");
   const [data, setData] = useState<DetailData>({ sensors: [], analyses: [], alerts: [], maintenance: [] });
   const [states, setStates] = useState({ sensors: "loading" as LoadState, ai: "loading" as LoadState, alerts: "loading" as LoadState, maintenance: "loading" as LoadState });
+
+  function replaceAlert(updatedAlert: Alert) {
+    setData((current) => ({ ...current, alerts: current.alerts.map((alert) => alert.id === updatedAlert.id ? updatedAlert : alert) }));
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -158,5 +163,5 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   if (assetState === "loading") return <section className="content-section detail-loading"><SectionState title="Loading asset detail" detail="Fetching asset context from the AssetGuard API." /></section>;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
-  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} /><AlertsSection state={states.alerts} alerts={data.alerts} /><MaintenanceSection state={states.maintenance} records={data.maintenance} /></section>;
+  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} /></section>;
 }
