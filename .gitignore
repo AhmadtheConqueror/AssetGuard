@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+backend/.venv/
+
+# Secrets
+backend/.env
+
+# Frontend local/generated
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
