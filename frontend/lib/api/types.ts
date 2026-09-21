@@ -19,6 +19,21 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface AIAnalysis {
+  id: string;
+  asset_id: string;
+  analyzed_at: string;
+  risk_score: number | null;
+  risk_level: string | null;
+  summary: string;
+  anomaly_detected: boolean;
+  findings: Record<string, unknown> | unknown[] | null;
+  recommended_actions: Record<string, unknown> | unknown[] | null;
+  model_provider: string | null;
+  model_name: string | null;
+  created_at: string;
+}
+
 export interface Sensor {
   id: string;
   asset_id: string;

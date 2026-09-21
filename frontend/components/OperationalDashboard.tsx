@@ -44,7 +44,7 @@ interface TrendChartProps {
 
 const chartColors = ["#3d7f73", "#c58b35", "#587c9b", "#9c655a", "#766a9c", "#4e8b8a"];
 
-function formatDateTime(value: string | null) {
+export function formatDateTime(value: string | null) {
   if (!value) return "No reading yet";
 
   return new Intl.DateTimeFormat(undefined, {
@@ -53,13 +53,13 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
-function formatValue(value: number | null, unit: string) {
+export function formatValue(value: number | null, unit: string) {
   if (value === null) return "--";
 
   return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)} ${unit}`;
 }
 
-function formatChange(readings: SensorReading[]) {
+export function formatChange(readings: SensorReading[]) {
   if (readings.length < 2) return "Trend needs more readings";
 
   const first = readings[0].value;
@@ -70,7 +70,7 @@ function formatChange(readings: SensorReading[]) {
   return `${sign}${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(difference)} over ${readings.length} readings`;
 }
 
-function TrendChart({ sensorName, unit, readings }: TrendChartProps) {
+export function TrendChart({ sensorName, unit, readings }: TrendChartProps) {
   const sortedReadings = [...readings].sort(
     (first, second) => new Date(first.recorded_at).getTime() - new Date(second.recorded_at).getTime(),
   );

@@ -1,5 +1,6 @@
 import type {
   Alert,
+  AIAnalysis,
   Asset,
   HealthResponse,
   MaintenanceRecord,
@@ -38,6 +39,10 @@ export function getAssets() {
   return getJson<Asset[]>("/api/assets");
 }
 
+export function getAsset(assetId: string) {
+  return getJson<Asset>(`/api/assets/${assetId}`);
+}
+
 export function getSensors(assetId: string) {
   return getJson<Sensor[]>(`/api/assets/${assetId}/sensors`);
 }
@@ -56,4 +61,12 @@ export function getAlerts(assetId: string) {
 
 export function getMaintenanceRecords(assetId: string) {
   return getJson<MaintenanceRecord[]>(`/api/assets/${assetId}/maintenance-records`);
+}
+
+export function getAIAnalyses(assetId: string) {
+  return getJson<AIAnalysis[]>(`/api/assets/${assetId}/ai-analyses`);
+}
+
+export function getLatestAIAnalysis(assetId: string) {
+  return getJson<AIAnalysis>(`/api/assets/${assetId}/ai-analyses/latest`);
 }
