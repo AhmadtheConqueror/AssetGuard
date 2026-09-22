@@ -9,7 +9,8 @@ import {
   startMaintenance,
   updateMaintenanceRecord,
 } from "@/lib/api/client";
-import { formatDateTime } from "@/components/OperationalDashboard";
+import { StatusBadge } from "@/components/StatusBadge";
+import { formatDateTime } from "@/lib/format";
 import type {
   Asset,
   MaintenanceCancelInput,
@@ -32,14 +33,6 @@ const typeLabels: Record<MaintenanceType, string> = {
   corrective: "Corrective",
   inspection: "Inspection",
 };
-
-function statusClass(value: string) {
-  return value.toLowerCase().replace(/_/g, "-").replace(/\s+/g, "-");
-}
-
-function displayValue(value: string) {
-  return value.replace(/_/g, " ");
-}
 
 function optionalText(value: string) {
   const trimmed = value.trim();
@@ -66,10 +59,6 @@ function fromDateTimeLocalValue(value: string) {
   if (Number.isNaN(date.getTime())) return undefined;
 
   return date.toISOString();
-}
-
-function Badge({ value, kind = "status" }: { value: string; kind?: string }) {
-  return <span className={`detail-badge detail-badge-${kind} detail-badge-${statusClass(value)}`}>{displayValue(value)}</span>;
 }
 
 export function maintenanceErrorMessage(error: unknown, fallback: string) {
@@ -277,6 +266,7 @@ export function MaintenanceRecordList({
   const [actions, setActions] = useState<Record<string, RecordAction | undefined>>({});
   const [panels, setPanels] = useState<Record<string, ActivePanel | undefined>>({});
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [successes, setSuccesses] = useState<Record<string, string | undefined>>({});
   const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
 
   function closePanel(recordId: string) {
@@ -292,8 +282,10 @@ export function MaintenanceRecordList({
   async function runAction(record: MaintenanceRecord, action: RecordAction, callback: () => Promise<MaintenanceRecord>) {
     setActions((current) => ({ ...current, [record.id]: action }));
     setErrors((current) => ({ ...current, [record.id]: undefined }));
+    setSuccesses((current) => ({ ...current, [record.id]: undefined }));
     try {
       replaceRecord(await callback());
+      setSuccesses((current) => ({ ...current, [record.id]: `${action === "saving" ? "Maintenance details saved" : action === "starting" ? "Maintenance started" : action === "completing" ? "Maintenance completed" : "Maintenance cancelled"}.` }));
     } catch (error) {
       setErrors((current) => ({ ...current, [record.id]: maintenanceErrorMessage(error, "Maintenance action failed. Try again.") }));
     } finally {
@@ -319,14 +311,15 @@ export function MaintenanceRecordList({
                 {showAsset && asset && <p className="alert-asset-link">{asset.name} - {asset.asset_code}</p>}
               </div>
               <div>
-                <Badge value={record.maintenance_type} kind="maintenance" />
-                <Badge value={record.status} />
+                <StatusBadge value={record.maintenance_type} kind="maintenance" />
+                <StatusBadge value={record.status} />
               </div>
             </div>
 
             <RecordFacts record={record} />
 
             {errors[record.id] && <p className="alert-action-error" role="alert">{errors[record.id]}</p>}
+            {successes[record.id] && <p className="action-success" role="status">{successes[record.id]}</p>}
 
             <div className="maintenance-actions">
               <button

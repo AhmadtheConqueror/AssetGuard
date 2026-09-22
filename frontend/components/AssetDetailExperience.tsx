@@ -13,7 +13,9 @@ import {
   getSensorReadings,
   getSensors,
 } from "@/lib/api/client";
-import { formatDateTime, formatValue, TrendChart } from "@/components/OperationalDashboard";
+import { TrendChart } from "@/components/OperationalDashboard";
+import { StatusBadge } from "@/components/StatusBadge";
+import { formatDateTime, formatSensorValue as formatValue } from "@/lib/format";
 import { AlertList } from "@/components/AlertWorkflow";
 import { CreateMaintenanceForm, MaintenanceEmptyState, MaintenanceRecordList } from "@/components/MaintenanceWorkflow";
 import type {
@@ -52,14 +54,6 @@ const sections = [
 ];
 
 const sensorColors = ["#3d7f73", "#c58b35", "#587c9b", "#9c655a", "#766a9c", "#4e8b8a"];
-
-function statusClass(value: string) {
-  return value.toLowerCase().replace(/\s+/g, "-");
-}
-
-function StatusBadge({ value, kind = "status" }: { value: string; kind?: string }) {
-  return <span className={`detail-badge detail-badge-${kind} detail-badge-${statusClass(value)}`}>{value.replace("_", " ")}</span>;
-}
 
 function SectionState({ title, detail, error = false }: { title: string; detail: string; error?: boolean }) {
   return <div className={`detail-state ${error ? "detail-state-error" : ""}`} role={error ? "alert" : undefined}><strong>{title}</strong><p>{detail}</p></div>;

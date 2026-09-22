@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 
             return (
-              <Link key={item.href} href={item.href} className={`nav-link ${isActive ? "nav-link-active" : ""}`}>
+              <Link key={item.href} href={item.href} aria-current={isActive ? "page" : undefined} className={`nav-link ${isActive ? "nav-link-active" : ""}`}>
                 <span className="nav-marker" aria-hidden="true">{item.marker}</span>
                 <span>{item.label}</span>
               </Link>

@@ -17,6 +17,8 @@ import type {
   Sensor,
   SensorReading,
 } from "@/lib/api/types";
+import { StatusBadge } from "@/components/StatusBadge";
+import { formatDateTime, formatLabel, formatSensorValue } from "@/lib/format";
 
 type SectionState = "loading" | "ready" | "error";
 
@@ -43,21 +45,6 @@ interface TrendChartProps {
 }
 
 const chartColors = ["#3d7f73", "#c58b35", "#587c9b", "#9c655a", "#766a9c", "#4e8b8a"];
-
-export function formatDateTime(value: string | null) {
-  if (!value) return "No reading yet";
-
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-export function formatValue(value: number | null, unit: string) {
-  if (value === null) return "--";
-
-  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)} ${unit}`;
-}
 
 export function formatChange(readings: SensorReading[]) {
   if (readings.length < 2) return "Trend needs more readings";
@@ -115,7 +102,7 @@ export function TrendChart({ sensorName, unit, readings }: TrendChartProps) {
           <polyline points={pointString} className="chart-line" />
           {points.map((point) => (
             <circle key={point.reading.id} cx={point.x} cy={point.y} r="3.5" className="chart-point">
-              <title>{`${formatValue(point.reading.value, unit)} · ${formatDateTime(point.reading.recorded_at)}`}</title>
+              <title>{`${formatSensorValue(point.reading.value, unit)} · ${formatDateTime(point.reading.recorded_at)}`}</title>
             </circle>
           ))}
           <text x={chartPadding.left} y={chartHeight - 8} className="chart-label">{formatDateTime(sortedReadings[0].recorded_at)}</text>
@@ -138,7 +125,7 @@ function SensorCard({ snapshot, colorIndex }: { snapshot: SensorSnapshot; colorI
     <article className="sensor-card" style={{ "--sensor-color": color } as React.CSSProperties}>
       <div className="sensor-card-topline"><span className="sensor-signal" aria-hidden="true" /><span>{sensor.sensor_type}</span><span className="sensor-status">{sensor.status}</span></div>
       <h3>{sensor.name}</h3>
-      <div className="sensor-value">{formatValue(latest?.value ?? null, sensor.unit)}</div>
+      <div className="sensor-value">{formatSensorValue(latest?.value ?? null, sensor.unit)}</div>
       <p className="sensor-timestamp">{latest ? `Updated ${formatDateTime(latest.recorded_at)}` : "No reading available"}</p>
       {latest?.quality && <span className="quality-label">Quality: {latest.quality}</span>}
     </article>
@@ -169,7 +156,7 @@ function AlertsSummary({ snapshot }: { snapshot: AssetSnapshot }) {
 function MaintenanceSummary({ snapshot }: { snapshot: AssetSnapshot }) {
   const activeMaintenance = snapshot.maintenance.filter((record) => record.status === "planned" || record.status === "in_progress");
 
-  return <section className="summary-panel"><div className="summary-panel-heading"><div><p className="section-kicker">Reliability work</p><h2>Maintenance</h2></div><span className="summary-count">{activeMaintenance.length}</span></div>{snapshot.maintenanceState === "loading" && <SectionMessage title="Loading maintenance" detail="Checking planned and active work." />}{snapshot.maintenanceState === "error" && <SectionMessage title="Maintenance unavailable" detail="Maintenance records could not be reached." error />}{snapshot.maintenanceState === "ready" && activeMaintenance.length === 0 && <SectionMessage title="No active maintenance" detail="There is no planned or in-progress work for this asset." />}{snapshot.maintenanceState === "ready" && activeMaintenance.length > 0 && <div className="summary-list">{activeMaintenance.map((record) => <div className="summary-list-item" key={record.id}><span className="maintenance-mark" aria-hidden="true">{record.status === "planned" ? "P" : "I"}</span><div><strong>{record.description}</strong><p>{record.maintenance_type} · {record.status.replace("_", " ")}</p></div></div>)}</div>}</section>;
+  return <section className="summary-panel"><div className="summary-panel-heading"><div><p className="section-kicker">Reliability work</p><h2>Maintenance</h2></div><span className="summary-count">{activeMaintenance.length}</span></div>{snapshot.maintenanceState === "loading" && <SectionMessage title="Loading maintenance" detail="Checking planned and active work." />}{snapshot.maintenanceState === "error" && <SectionMessage title="Maintenance unavailable" detail="Maintenance records could not be reached." error />}{snapshot.maintenanceState === "ready" && activeMaintenance.length === 0 && <SectionMessage title="No active maintenance" detail="There is no planned or in-progress work for this asset." />}{snapshot.maintenanceState === "ready" && activeMaintenance.length > 0 && <div className="summary-list">{activeMaintenance.map((record) => <div className="summary-list-item" key={record.id}><span className="maintenance-mark" aria-hidden="true">{record.status === "planned" ? "P" : "I"}</span><div><strong>{record.description}</strong><p>{formatLabel(record.maintenance_type)} · {formatLabel(record.status)}</p></div></div>)}</div>}</section>;
 }
 
 export function OperationalDashboard() {
@@ -243,7 +230,7 @@ export function OperationalDashboard() {
       {assetsState === "error" && <SectionMessage title="Dashboard data unavailable" detail="The asset register could not be reached. The shell remains available while the backend is offline." error />}
       {assetsState === "ready" && assetSnapshots.length === 0 && <SectionMessage title="No assets registered" detail="Add an asset through the backend before using the operational dashboard." />}
       {assetsState === "ready" && assetSnapshots.map((snapshot) => <div key={snapshot.asset.id} className="asset-dashboard-group">
-        <section className="asset-overview-row"><div><p className="section-kicker">Monitored asset</p><Link href={`/assets/${snapshot.asset.id}`} className="asset-overview-link"><h2>{snapshot.asset.name}</h2><span>{snapshot.asset.asset_code}</span></Link></div><div className="asset-overview-facts"><span><b>Type</b>{snapshot.asset.asset_type}</span><span><b>Location</b>{snapshot.asset.location ?? "Not set"}</span><span><b>Status</b><span className="asset-status status-chip-active">{snapshot.asset.status}</span></span></div></section>
+        <section className="asset-overview-row"><div><p className="section-kicker">Monitored asset</p><Link href={`/assets/${snapshot.asset.id}`} className="asset-overview-link"><h2>{snapshot.asset.name}</h2><span>{snapshot.asset.asset_code}</span></Link></div><div className="asset-overview-facts"><span><b>Type</b>{snapshot.asset.asset_type}</span><span><b>Location</b>{snapshot.asset.location ?? "Not set"}</span><span><b>Status</b><StatusBadge value={snapshot.asset.status} /></span></div></section>
         <AssetTelemetry snapshot={snapshot} />
         <div className="summary-grid"><AlertsSummary snapshot={snapshot} /><MaintenanceSummary snapshot={snapshot} /></div>
       </div>)}

@@ -8,14 +8,11 @@ import {
   resolveAlert,
   updateAlert,
 } from "@/lib/api/client";
-import { formatDateTime } from "@/components/OperationalDashboard";
+import { StatusBadge } from "@/components/StatusBadge";
+import { formatDateTime } from "@/lib/format";
 import type { Alert, AlertCreateInput, AlertResolveInput, Asset } from "@/lib/api/types";
 
 type AlertAction = "acknowledging" | "resolving" | "saving";
-
-function statusClass(value: string) {
-  return value.toLowerCase().replace(/\s+/g, "-");
-}
 
 export function alertErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
@@ -26,10 +23,6 @@ export function alertErrorMessage(error: unknown, fallback: string) {
   }
 
   return fallback;
-}
-
-function Badge({ value, kind = "status" }: { value: string; kind?: string }) {
-  return <span className={`detail-badge detail-badge-${kind} detail-badge-${statusClass(value)}`}>{value.replace("_", " ")}</span>;
 }
 
 export function AlertList({
@@ -47,6 +40,7 @@ export function AlertList({
   const [notes, setNotes] = useState<Record<string, string>>(() => Object.fromEntries(alerts.map((alert) => [alert.id, alert.engineer_notes ?? ""])));
   const [editingNotes, setEditingNotes] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  const [successes, setSuccesses] = useState<Record<string, string | undefined>>({});
   const assetById = new Map(assets.map((asset) => [asset.id, asset]));
 
   function replaceAlert(alert: Alert) {
@@ -59,8 +53,10 @@ export function AlertList({
   async function runAction(alert: Alert, action: AlertAction, callback: () => Promise<Alert>) {
     setActions((current) => ({ ...current, [alert.id]: action }));
     setErrors((current) => ({ ...current, [alert.id]: undefined }));
+    setSuccesses((current) => ({ ...current, [alert.id]: undefined }));
     try {
       replaceAlert(await callback());
+      setSuccesses((current) => ({ ...current, [alert.id]: action === "saving" ? "Engineer notes saved." : action === "acknowledging" ? "Alert acknowledged." : "Alert resolved." }));
     } catch (error) {
       setErrors((current) => ({ ...current, [alert.id]: alertErrorMessage(error, "Alert action failed. Try again.") }));
     } finally {
@@ -79,10 +75,11 @@ export function AlertList({
     const canResolve = alert.status === "open" || alert.status === "acknowledged";
 
     return <article className="alert-record" key={alert.id}>
-      <div className="alert-record-heading"><div><h3>{alert.title}</h3>{showAsset && asset && <p className="alert-asset-link">{asset.name} · {asset.asset_code}</p>}</div><div className="alert-badge-group"><Badge value={alert.severity} kind="severity" /><Badge value={alert.status} /></div></div>
+      <div className="alert-record-heading"><div><h3>{alert.title}</h3>{showAsset && asset && <p className="alert-asset-link">{asset.name} · {asset.asset_code}</p>}</div><div className="alert-badge-group"><StatusBadge value={alert.severity} kind="severity" /><StatusBadge value={alert.status} /></div></div>
       <div className="alert-record-body"><p>{alert.description || "No description provided."}</p><dl className="alert-record-facts"><div><dt>Detected</dt><dd>{formatDateTime(alert.detected_at)}</dd></div>{alert.acknowledged_at && <div><dt>Acknowledged</dt><dd>{formatDateTime(alert.acknowledged_at)}</dd></div>}{alert.resolved_at && <div><dt>Resolved</dt><dd>{formatDateTime(alert.resolved_at)}</dd></div>}</dl></div>
       <div className="alert-notes-area"><div className="alert-notes-heading"><span>Engineer notes</span>{!isEditing && <button type="button" className="text-button" onClick={() => setEditingNotes((current) => ({ ...current, [alert.id]: true }))}>{alert.engineer_notes ? "Edit" : "Add notes"}</button>}</div>{isEditing ? <div className="notes-editor"><textarea value={notes[alert.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [alert.id]: event.target.value }))} rows={2} placeholder="Add context for the next engineer" /><div className="notes-editor-actions"><button type="button" className="quiet-button" onClick={() => { setNotes((current) => ({ ...current, [alert.id]: alert.engineer_notes ?? "" })); setEditingNotes((current) => ({ ...current, [alert.id]: false })); }}>Cancel</button><button type="button" className="primary-small-button" disabled={action === "saving"} onClick={() => void saveNotes(alert)}>{action === "saving" ? "Saving..." : "Save notes"}</button></div></div> : <p className={alert.engineer_notes ? "alert-notes" : "alert-notes-empty"}>{alert.engineer_notes || "No engineer notes added."}</p>}</div>
       {errors[alert.id] && <p className="alert-action-error" role="alert">{errors[alert.id]}</p>}
+      {successes[alert.id] && <p className="action-success" role="status">{successes[alert.id]}</p>}
       {(alert.status === "open" || canResolve) && <div className="alert-actions">{alert.status === "open" && <button type="button" className="quiet-button" disabled={Boolean(action)} onClick={() => void runAction(alert, "acknowledging", () => acknowledgeAlert(alert.id))}>{action === "acknowledging" ? "Acknowledging..." : "Acknowledge"}</button>}{canResolve && <button type="button" className="primary-small-button" disabled={Boolean(action)} onClick={() => void runAction(alert, "resolving", () => { const input: AlertResolveInput = { engineer_notes: notes[alert.id] ?? "" }; return resolveAlert(alert.id, input); })}>{action === "resolving" ? "Resolving..." : "Resolve"}</button>}</div>}
     </article>;
   })}</div>;

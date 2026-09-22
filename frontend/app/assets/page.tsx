@@ -4,11 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getAssets } from "@/lib/api/client";
 import type { Asset } from "@/lib/api/types";
+import { StatusBadge } from "@/components/StatusBadge";
 
 type LoadState = "loading" | "ready" | "error";
 
 function AssetStatus({ status }: { status: string }) {
-  return <span className={`asset-status status-chip-${status}`}>{status.replace("_", " ")}</span>;
+  return <StatusBadge value={status} />;
 }
 
 export default function AssetsPage() {
