@@ -92,7 +92,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <main className="main-panel">
         <header className="topbar">
           <div><p className="eyebrow">{meta.eyebrow}</p><h1>{meta.title}</h1><p className="topbar-description">{meta.description}</p></div>
-          <StatusIndicator state={healthState} />
         </header>
         <div className="page-content">{children}</div>
       </main>

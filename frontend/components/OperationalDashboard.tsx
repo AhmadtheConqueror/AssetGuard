@@ -45,7 +45,7 @@ interface TrendChartProps {
   readings: SensorReading[];
 }
 
-const chartColors = ["#3d7f73", "#c58b35", "#587c9b", "#9c655a", "#766a9c", "#4e8b8a"];
+const chartColors = ["#628b82", "#b59762", "#748e9f", "#987a73", "#817b96", "#668f8d"];
 
 export function formatChange(readings: SensorReading[]) {
   if (readings.length < 2) return "Trend needs more readings";
@@ -64,7 +64,7 @@ export function TrendChart({ sensorName, unit, readings }: TrendChartProps) {
   );
   const chartWidth = 620;
   const chartHeight = 190;
-  const chartPadding = { top: 18, right: 18, bottom: 30, left: 46 };
+  const chartPadding = { top: 20, right: 22, bottom: 34, left: 48 };
   const plotWidth = chartWidth - chartPadding.left - chartPadding.right;
   const plotHeight = chartHeight - chartPadding.top - chartPadding.bottom;
   const values = sortedReadings.map((reading) => reading.value);
@@ -218,7 +218,7 @@ export function OperationalDashboard() {
 
   return (
     <section className="content-section dashboard-section operational-dashboard">
-      <div className="dashboard-intro dashboard-intro-compact"><div><p className="section-kicker">Operational view</p><h2>Monitor what matters.</h2><p className="intro-copy">A live view of registered assets, current telemetry, and reliability work from the AssetGuard API.</p></div><span className="data-badge">LIVE DATA</span></div>
+      <div className="dashboard-intro dashboard-intro-compact"><div><p className="section-kicker">Operational view</p><p className="intro-copy">Live asset, telemetry, signal, and reliability status from the AssetGuard API.</p></div><span className="data-badge">LIVE DATA</span></div>
 
       {assetsState !== "loading" && <div className="kpi-grid" aria-label="Operational summary">
         <div className="kpi-card"><span>Total assets</span><strong>{totalAssets}</strong><small>Registered equipment</small></div>
