@@ -89,13 +89,14 @@ export interface AlertResolveInput {
   engineer_notes?: string;
 }
 
+export type MaintenanceType = "preventive" | "predictive" | "corrective" | "inspection";
 export type MaintenanceStatus = "planned" | "in_progress" | "completed" | "cancelled";
 
 export interface MaintenanceRecord {
   id: string;
   asset_id: string;
   alert_id: string | null;
-  maintenance_type: "preventive" | "predictive" | "corrective" | "inspection";
+  maintenance_type: MaintenanceType;
   description: string;
   status: MaintenanceStatus;
   scheduled_for: string | null;
@@ -105,4 +106,33 @@ export interface MaintenanceRecord {
   engineer_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface MaintenanceCreateInput {
+  maintenance_type: MaintenanceType;
+  description: string;
+  alert_id?: string | null;
+  scheduled_for?: string | null;
+  engineer_name?: string | null;
+}
+
+export interface MaintenanceUpdateInput {
+  maintenance_type?: MaintenanceType;
+  description?: string;
+  scheduled_for?: string | null;
+  engineer_name?: string | null;
+  outcome?: string | null;
+}
+
+export interface MaintenanceStartInput {
+  engineer_name?: string | null;
+}
+
+export interface MaintenanceCompleteInput {
+  outcome?: string | null;
+  engineer_name?: string | null;
+}
+
+export interface MaintenanceCancelInput {
+  outcome?: string | null;
 }

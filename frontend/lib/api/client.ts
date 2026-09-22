@@ -6,7 +6,12 @@ import type {
   AIAnalysis,
   Asset,
   HealthResponse,
+  MaintenanceCancelInput,
+  MaintenanceCompleteInput,
+  MaintenanceCreateInput,
   MaintenanceRecord,
+  MaintenanceStartInput,
+  MaintenanceUpdateInput,
   Sensor,
   SensorReading,
 } from "./types";
@@ -84,6 +89,24 @@ export class ApiError extends Error {
   }
 }
 
+function getApiErrorDetail(detail: unknown) {
+  if (typeof detail === "string") return detail;
+  if (!Array.isArray(detail)) return null;
+
+  const messages = detail
+    .map((item) => {
+      if (item && typeof item === "object" && "msg" in item) {
+        const { msg } = item as { msg?: unknown };
+        return typeof msg === "string" ? msg : null;
+      }
+
+      return null;
+    })
+    .filter((message): message is string => Boolean(message));
+
+  return messages.length > 0 ? messages.join(" ") : null;
+}
+
 async function requestJson<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
   const response = await fetch(getApiUrl(path), {
     method,
@@ -94,8 +117,8 @@ async function requestJson<T>(path: string, method: "POST" | "PATCH", body: unkn
   if (!response.ok) {
     let detail = `Request failed with status ${response.status}`;
     try {
-      const errorBody = await response.json() as { detail?: string };
-      if (errorBody.detail) detail = errorBody.detail;
+      const errorBody = await response.json() as { detail?: unknown };
+      detail = getApiErrorDetail(errorBody.detail) ?? detail;
     } catch {
       // Keep the status-based message when the server does not return JSON.
     }
@@ -119,4 +142,24 @@ export function acknowledgeAlert(alertId: string) {
 
 export function resolveAlert(alertId: string, input: AlertResolveInput) {
   return requestJson<Alert>(`/api/alerts/${alertId}/resolve`, "POST", input);
+}
+
+export function createMaintenanceRecord(assetId: string, input: MaintenanceCreateInput) {
+  return requestJson<MaintenanceRecord>(`/api/assets/${assetId}/maintenance-records`, "POST", input);
+}
+
+export function updateMaintenanceRecord(recordId: string, input: MaintenanceUpdateInput) {
+  return requestJson<MaintenanceRecord>(`/api/maintenance-records/${recordId}`, "PATCH", input);
+}
+
+export function startMaintenance(recordId: string, input: MaintenanceStartInput = {}) {
+  return requestJson<MaintenanceRecord>(`/api/maintenance-records/${recordId}/start`, "POST", input);
+}
+
+export function completeMaintenance(recordId: string, input: MaintenanceCompleteInput = {}) {
+  return requestJson<MaintenanceRecord>(`/api/maintenance-records/${recordId}/complete`, "POST", input);
+}
+
+export function cancelMaintenance(recordId: string, input: MaintenanceCancelInput = {}) {
+  return requestJson<MaintenanceRecord>(`/api/maintenance-records/${recordId}/cancel`, "POST", input);
 }

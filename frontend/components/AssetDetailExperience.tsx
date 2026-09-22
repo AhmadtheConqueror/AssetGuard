@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/client";
 import { formatDateTime, formatValue, TrendChart } from "@/components/OperationalDashboard";
 import { AlertList } from "@/components/AlertWorkflow";
+import { CreateMaintenanceForm, MaintenanceEmptyState, MaintenanceRecordList } from "@/components/MaintenanceWorkflow";
 import type {
   AIAnalysis,
   Alert,
@@ -57,10 +58,6 @@ function StatusBadge({ value, kind = "status" }: { value: string; kind?: string 
 
 function SectionState({ title, detail, error = false }: { title: string; detail: string; error?: boolean }) {
   return <div className={`detail-state ${error ? "detail-state-error" : ""}`} role={error ? "alert" : undefined}><strong>{title}</strong><p>{detail}</p></div>;
-}
-
-function formatOptionalDate(value: string | null) {
-  return value ? formatDateTime(value) : null;
 }
 
 function ValueList({ value }: { value: Record<string, unknown> | unknown[] | null }) {
@@ -112,8 +109,22 @@ function AlertsSection({ state, alerts, asset, onAlertChange }: { state: LoadSta
   return <section id="alerts" className="detail-section-block" aria-labelledby="alerts-title"><div className="detail-section-heading"><div><p className="section-kicker">Signal history</p><h3 id="alerts-title">Alerts</h3></div><span className="detail-section-meta">{alerts.length} recorded</span></div>{state === "loading" && <SectionState title="Loading alert history" detail="Fetching alerts for this asset." />}{state === "error" && <SectionState title="Alerts unavailable" detail="The alert history could not be retrieved." error />}{state === "ready" && alerts.length === 0 && <SectionState title="No alerts recorded for this asset." detail="There are no alert records to review." />}{state === "ready" && alerts.length > 0 && <AlertList alerts={alerts} assets={[asset]} showAsset={false} onAlertChange={onAlertChange} />}</section>;
 }
 
-function MaintenanceSection({ state, records }: { state: LoadState; records: MaintenanceRecord[] }) {
-  return <section id="maintenance" className="detail-section-block" aria-labelledby="maintenance-title"><div className="detail-section-heading"><div><p className="section-kicker">Reliability history</p><h3 id="maintenance-title">Maintenance</h3></div><span className="detail-section-meta">{records.length} recorded</span></div>{state === "loading" && <SectionState title="Loading maintenance history" detail="Fetching maintenance records for this asset." />}{state === "error" && <SectionState title="Maintenance unavailable" detail="The maintenance history could not be retrieved." error />}{state === "ready" && records.length === 0 && <SectionState title="No maintenance records for this asset." detail="There are no maintenance records to review." />}{state === "ready" && records.length > 0 && <div className="record-list">{records.map((record) => <article className="record-card" key={record.id}><div className="record-card-heading"><h4>{record.description}</h4><div><StatusBadge value={record.maintenance_type} kind="maintenance" /><StatusBadge value={record.status} /></div></div><dl className="record-details">{record.scheduled_for && <div><dt>Scheduled</dt><dd>{formatOptionalDate(record.scheduled_for)}</dd></div>}{record.started_at && <div><dt>Started</dt><dd>{formatOptionalDate(record.started_at)}</dd></div>}{record.completed_at && <div><dt>Completed</dt><dd>{formatOptionalDate(record.completed_at)}</dd></div>}{record.engineer_name && <div><dt>Engineer</dt><dd>{record.engineer_name}</dd></div>}{record.outcome && <div><dt>Outcome</dt><dd>{record.outcome}</dd></div>}</dl></article>)}</div>}</section>;
+function MaintenanceSection({
+  state,
+  records,
+  asset,
+  onRecordChange,
+  onRecordCreated,
+}: {
+  state: LoadState;
+  records: MaintenanceRecord[];
+  asset: Asset;
+  onRecordChange: (record: MaintenanceRecord) => void;
+  onRecordCreated: (record: MaintenanceRecord) => void;
+}) {
+  const [isScheduling, setIsScheduling] = useState(false);
+
+  return <section id="maintenance" className="detail-section-block" aria-labelledby="maintenance-title"><div className="detail-section-heading"><div><p className="section-kicker">Reliability history</p><h3 id="maintenance-title">Maintenance</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{records.length} recorded</span>{state === "ready" && <button type="button" className="primary-small-button" onClick={() => setIsScheduling((current) => !current)}>{isScheduling ? "Close Scheduler" : "Schedule Maintenance"}</button>}</div></div>{state === "loading" && <SectionState title="Loading maintenance history" detail="Fetching maintenance records for this asset." />}{state === "error" && <SectionState title="Maintenance unavailable" detail="The maintenance history could not be retrieved." error />}{state === "ready" && isScheduling && <CreateMaintenanceForm assets={[asset]} defaultAssetId={asset.id} lockAsset onCreated={(record) => { onRecordCreated(record); setIsScheduling(false); }} onCancel={() => setIsScheduling(false)} />}{state === "ready" && records.length === 0 && !isScheduling && <MaintenanceEmptyState hasRecords={false} onSchedule={() => setIsScheduling(true)} />}{state === "ready" && records.length > 0 && <MaintenanceRecordList records={records} assets={[asset]} showAsset={false} onRecordChange={onRecordChange} />}</section>;
 }
 
 export function AssetDetailExperience({ assetId }: { assetId: string }) {
@@ -124,6 +135,14 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
 
   function replaceAlert(updatedAlert: Alert) {
     setData((current) => ({ ...current, alerts: current.alerts.map((alert) => alert.id === updatedAlert.id ? updatedAlert : alert) }));
+  }
+
+  function replaceMaintenanceRecord(updatedRecord: MaintenanceRecord) {
+    setData((current) => ({ ...current, maintenance: current.maintenance.map((record) => record.id === updatedRecord.id ? updatedRecord : record) }));
+  }
+
+  function addMaintenanceRecord(record: MaintenanceRecord) {
+    setData((current) => ({ ...current, maintenance: [record, ...current.maintenance] }));
   }
 
   useEffect(() => {
@@ -163,5 +182,5 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   if (assetState === "loading") return <section className="content-section detail-loading"><SectionState title="Loading asset detail" detail="Fetching asset context from the AssetGuard API." /></section>;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
-  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} /></section>;
+  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
 }
