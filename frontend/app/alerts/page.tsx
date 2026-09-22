@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AlertList, CreateAlertForm, alertErrorMessage } from "@/components/AlertWorkflow";
+import { RecordSkeletons } from "@/components/Skeleton";
 import { getAlerts, getAssets } from "@/lib/api/client";
 import type { Alert, Asset } from "@/lib/api/types";
 
@@ -74,10 +75,10 @@ export default function AlertsPage() {
     <div className="workspace-intro"><div><p className="section-kicker">Signal review</p><h2>Alerts workspace</h2><p className="intro-copy">Review, acknowledge, and resolve equipment signals across the asset register.</p></div><span className="data-badge">LIVE DATA</span></div>
     <div className="alert-count-grid" aria-label="Alert summary"><div><span>Open</span><strong>{counts.open}</strong></div><div><span>Acknowledged</span><strong>{counts.acknowledged}</strong></div><div><span>Resolved</span><strong>{counts.resolved}</strong></div><div><span>Total</span><strong>{counts.total}</strong></div></div>
     {assets.length > 0 && <CreateAlertForm assets={assets} onCreated={addAlert} />}
-    <section className="alert-register"><div className="alert-register-heading"><div><p className="section-kicker">Alert register</p><h3>{filteredAlerts.length} matching {filteredAlerts.length === 1 ? "alert" : "alerts"}</h3></div><div className="filter-status">{loadState === "loading" ? "Loading..." : "Live register"}</div></div>
+    <section className="alert-register"><div className="alert-register-heading"><div><p className="section-kicker">Alert register</p><h3>{filteredAlerts.length} matching {filteredAlerts.length === 1 ? "alert" : "alerts"}</h3></div><div className="filter-status">{loadState === "loading" ? "Updating register" : "Live register"}</div></div>
       <div className="alert-filters"><label>Status<select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="open">Open</option><option value="acknowledged">Acknowledged</option><option value="resolved">Resolved</option></select></label><label>Severity<select value={severity} onChange={(event) => setSeverity(event.target.value as SeverityFilter)}><option value="all">All severities</option><option value="low">Low</option><option value="moderate">Moderate</option><option value="high">High</option><option value="critical">Critical</option></select></label><label>Asset<select value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="all">All assets</option>{assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name} · {asset.asset_code}</option>)}</select></label><label className="filter-search">Title search<input value={titleSearch} onChange={(event) => setTitleSearch(event.target.value)} placeholder="Search alert titles" /></label></div>
       {error && <div className="alert-workspace-notice" role="alert">{error}</div>}
-      {loadState === "loading" && <div className="detail-state"><strong>Loading alert register</strong><p>Fetching assets and their alert records.</p></div>}
+      {loadState === "loading" && <RecordSkeletons />}
       {loadState !== "loading" && filteredAlerts.length === 0 && <div className="detail-state"><strong>{alerts.length === 0 ? "No alerts recorded" : "No matching alerts"}</strong><p>{alerts.length === 0 ? "Create an alert when an equipment signal needs review." : "Adjust the filters to see other records."}</p></div>}
       {filteredAlerts.length > 0 && <AlertList alerts={filteredAlerts} assets={assets} onAlertChange={replaceAlert} />}
     </section>

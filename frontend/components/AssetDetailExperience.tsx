@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/client";
 import { TrendChart } from "@/components/OperationalDashboard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { AssetDetailSkeleton, RecordSkeletons, SectionSkeleton } from "@/components/Skeleton";
 import { formatDateTime, formatSensorValue as formatValue } from "@/lib/format";
 import { AlertList } from "@/components/AlertWorkflow";
 import { CreateMaintenanceForm, MaintenanceEmptyState, MaintenanceRecordList } from "@/components/MaintenanceWorkflow";
@@ -39,6 +40,7 @@ interface SensorSnapshot {
 }
 
 interface DetailData {
+  loading: boolean;
   sensors: SensorSnapshot[];
   analyses: AIAnalysis[];
   alerts: Alert[];
@@ -56,6 +58,8 @@ const sections = [
 const sensorColors = ["#3d7f73", "#c58b35", "#587c9b", "#9c655a", "#766a9c", "#4e8b8a"];
 
 function SectionState({ title, detail, error = false }: { title: string; detail: string; error?: boolean }) {
+  if (title.startsWith("Loading sensor")) return <SectionSkeleton variant="chart" count={2} />;
+  if (title.startsWith("Loading")) return <RecordSkeletons count={2} />;
   return <div className={`detail-state ${error ? "detail-state-error" : ""}`} role={error ? "alert" : undefined}><strong>{title}</strong><p>{detail}</p></div>;
 }
 
@@ -102,6 +106,8 @@ function OverviewSection({ asset, data }: { asset: Asset; data: DetailData }) {
   const latestTimestamp = data.sensors.map(({ latest }) => latest?.recorded_at).filter(Boolean).sort().at(-1) ?? null;
   const openAlerts = data.alerts.filter((alert) => alert.status === "open").length;
   const activeMaintenance = data.maintenance.filter((record) => record.status === "planned" || record.status === "in_progress").length;
+
+  if (data.loading) return <section id="overview" className="detail-section-block" aria-labelledby="overview-title"><div className="detail-section-heading"><div><p className="section-kicker">Operational summary</p><h3 id="overview-title">{asset.name} at a glance</h3></div></div><SectionSkeleton variant="card" count={5} /></section>;
 
   return <section id="overview" className="detail-section-block" aria-labelledby="overview-title"><div className="detail-section-heading"><div><p className="section-kicker">Operational summary</p><h3 id="overview-title">{asset.name} at a glance</h3></div><StatusBadge value={asset.status} /></div><div className="overview-facts"><div><span>Total sensors</span><strong>{data.sensors.length}</strong></div><div><span>Latest telemetry</span><strong>{latestTimestamp ? formatDateTime(latestTimestamp) : "No readings"}</strong></div><div><span>Open alerts</span><strong>{openAlerts}</strong></div><div><span>Active maintenance</span><strong>{activeMaintenance}</strong></div><div><span>AI history</span><strong>{data.analyses.length > 0 ? `${data.analyses.length} analysis${data.analyses.length === 1 ? "" : "es"}` : "None yet"}</strong></div></div></section>;
 }
@@ -164,7 +170,7 @@ function MaintenanceSection({
 export function AssetDetailExperience({ assetId }: { assetId: string }) {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [assetState, setAssetState] = useState<LoadState>("loading");
-  const [data, setData] = useState<DetailData>({ sensors: [], analyses: [], alerts: [], maintenance: [] });
+  const [data, setData] = useState<DetailData>({ loading: true, sensors: [], analyses: [], alerts: [], maintenance: [] });
   const [states, setStates] = useState({ sensors: "loading" as LoadState, ai: "loading" as LoadState, alerts: "loading" as LoadState, maintenance: "loading" as LoadState });
 
   function replaceAlert(updatedAlert: Alert) {
@@ -206,7 +212,7 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
           return { sensor, latest: latestResult.status === "fulfilled" ? latestResult.value : null, readings: readingsResult.status === "fulfilled" ? readingsResult.value : [] };
         }));
         if (!mounted) return;
-        setData({ sensors: sensorSnapshots, analyses: analysesResult.status === "fulfilled" ? analysesResult.value : [], alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [], maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : [] });
+        setData({ loading: false, sensors: sensorSnapshots, analyses: analysesResult.status === "fulfilled" ? analysesResult.value : [], alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [], maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : [] });
         setStates({ sensors: sensorsResult.status === "fulfilled" ? "ready" : "error", ai: analysesResult.status === "fulfilled" ? "ready" : "error", alerts: alertsResult.status === "fulfilled" ? "ready" : "error", maintenance: maintenanceResult.status === "fulfilled" ? "ready" : "error" });
       } catch {
         if (mounted) setAssetState("error");
@@ -217,7 +223,7 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
     return () => { mounted = false; };
   }, [assetId]);
 
-  if (assetState === "loading") return <section className="content-section detail-loading"><SectionState title="Loading asset detail" detail="Fetching asset context from the AssetGuard API." /></section>;
+  if (assetState === "loading") return <AssetDetailSkeleton />;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
   return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;

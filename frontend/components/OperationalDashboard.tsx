@@ -18,6 +18,7 @@ import type {
   SensorReading,
 } from "@/lib/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DashboardSkeleton } from "@/components/Skeleton";
 import { formatDateTime, formatLabel, formatSensorValue } from "@/lib/format";
 
 type SectionState = "loading" | "ready" | "error";
@@ -219,14 +220,14 @@ export function OperationalDashboard() {
     <section className="content-section dashboard-section operational-dashboard">
       <div className="dashboard-intro dashboard-intro-compact"><div><p className="section-kicker">Operational view</p><h2>Monitor what matters.</h2><p className="intro-copy">A live view of registered assets, current telemetry, and reliability work from the AssetGuard API.</p></div><span className="data-badge">LIVE DATA</span></div>
 
-      <div className="kpi-grid" aria-label="Operational summary">
-        <div className="kpi-card"><span>Total assets</span><strong>{assetsState === "loading" ? "--" : totalAssets}</strong><small>Registered equipment</small></div>
-        <div className="kpi-card"><span>Active assets</span><strong>{assetsState === "loading" ? "--" : activeAssets}</strong><small>Currently active</small></div>
-        <div className="kpi-card"><span>Open alerts</span><strong>{assetsState === "loading" ? "--" : openAlerts}</strong><small>Awaiting review</small></div>
-        <div className="kpi-card"><span>Maintenance</span><strong>{assetsState === "loading" ? "--" : activeMaintenance}</strong><small>Planned or in progress</small></div>
-      </div>
+      {assetsState !== "loading" && <div className="kpi-grid" aria-label="Operational summary">
+        <div className="kpi-card"><span>Total assets</span><strong>{totalAssets}</strong><small>Registered equipment</small></div>
+        <div className="kpi-card"><span>Active assets</span><strong>{activeAssets}</strong><small>Currently active</small></div>
+        <div className="kpi-card"><span>Open alerts</span><strong>{openAlerts}</strong><small>Awaiting review</small></div>
+        <div className="kpi-card"><span>Maintenance</span><strong>{activeMaintenance}</strong><small>Planned or in progress</small></div>
+      </div>}
 
-      {assetsState === "loading" && <SectionMessage title="Loading operational data" detail="Connecting to assets, telemetry, alerts, and maintenance endpoints." />}
+      {assetsState === "loading" && <DashboardSkeleton />}
       {assetsState === "error" && <SectionMessage title="Dashboard data unavailable" detail="The asset register could not be reached. The shell remains available while the backend is offline." error />}
       {assetsState === "ready" && assetSnapshots.length === 0 && <SectionMessage title="No assets registered" detail="Add an asset through the backend before using the operational dashboard." />}
       {assetsState === "ready" && assetSnapshots.map((snapshot) => <div key={snapshot.asset.id} className="asset-dashboard-group">

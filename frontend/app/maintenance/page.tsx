@@ -8,6 +8,7 @@ import {
   maintenanceErrorMessage,
   maintenanceTypes,
 } from "@/components/MaintenanceWorkflow";
+import { RecordSkeletons } from "@/components/Skeleton";
 import { getAssets, getMaintenanceRecords } from "@/lib/api/client";
 import type { Asset, MaintenanceRecord, MaintenanceStatus, MaintenanceType } from "@/lib/api/types";
 
@@ -83,10 +84,10 @@ export default function MaintenancePage() {
     <div className="workspace-intro"><div><p className="section-kicker">Reliability work</p><h2>Maintenance workspace</h2><p className="intro-copy">Schedule, filter, start, complete, and cancel maintenance work across monitored assets.</p></div><div className="workspace-actions"><span className="data-badge">LIVE DATA</span><button type="button" className="primary-small-button" disabled={assets.length === 0} onClick={() => setIsScheduling((current) => !current)}>{isScheduling ? "Close Scheduler" : "Schedule Maintenance"}</button></div></div>
     <div className="maintenance-count-grid" aria-label="Maintenance summary"><div><span>Planned</span><strong>{counts.planned}</strong></div><div><span>In Progress</span><strong>{counts.inProgress}</strong></div><div><span>Completed</span><strong>{counts.completed}</strong></div><div><span>Cancelled</span><strong>{counts.cancelled}</strong></div><div><span>Total</span><strong>{counts.total}</strong></div></div>
     {isScheduling && assets.length > 0 && <CreateMaintenanceForm assets={assets} onCreated={addRecord} onCancel={() => setIsScheduling(false)} />}
-    <section className="maintenance-register"><div className="alert-register-heading"><div><p className="section-kicker">Maintenance register</p><h3>{filteredRecords.length} matching {filteredRecords.length === 1 ? "record" : "records"}</h3></div><div className="filter-status">{loadState === "loading" ? "Loading..." : "Live register"}</div></div>
+    <section className="maintenance-register"><div className="alert-register-heading"><div><p className="section-kicker">Maintenance register</p><h3>{filteredRecords.length} matching {filteredRecords.length === 1 ? "record" : "records"}</h3></div><div className="filter-status">{loadState === "loading" ? "Updating register" : "Live register"}</div></div>
       <div className="maintenance-filters"><label>Status<select value={status} onChange={(event) => setStatus(event.target.value as StatusFilter)}><option value="all">All statuses</option><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></label><label>Type<select value={maintenanceType} onChange={(event) => setMaintenanceType(event.target.value as TypeFilter)}><option value="all">All types</option>{maintenanceTypes.map((type) => <option value={type} key={type}>{type.replace("_", " ")}</option>)}</select></label><label>Asset<select value={assetId} onChange={(event) => setAssetId(event.target.value)}><option value="all">All assets</option>{assets.map((asset) => <option value={asset.id} key={asset.id}>{asset.name} - {asset.asset_code}</option>)}</select></label><label className="filter-search">Search<input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Description or engineer" /></label></div>
       {error && <div className="alert-workspace-notice" role="alert">{error}</div>}
-      {loadState === "loading" && <div className="detail-state"><strong>Loading maintenance register</strong><p>Fetching assets and their maintenance records.</p></div>}
+      {loadState === "loading" && <RecordSkeletons />}
       {loadState !== "loading" && filteredRecords.length === 0 && <MaintenanceEmptyState hasRecords={records.length > 0} canSchedule={assets.length > 0} onSchedule={() => setIsScheduling(true)} />}
       {filteredRecords.length > 0 && <MaintenanceRecordList records={filteredRecords} assets={assets} onRecordChange={replaceRecord} />}
     </section>

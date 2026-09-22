@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getAssets } from "@/lib/api/client";
 import type { Asset } from "@/lib/api/types";
 import { StatusBadge } from "@/components/StatusBadge";
+import { SectionSkeleton } from "@/components/Skeleton";
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -26,7 +27,7 @@ export default function AssetsPage() {
         <div><p className="section-kicker">Live from the asset register</p><h2>Equipment directory</h2></div>
         {loadState === "ready" && <span className="record-count">{assets.length} {assets.length === 1 ? "asset" : "assets"}</span>}
       </div>
-      {loadState === "loading" && <div className="state-panel" aria-live="polite"><span className="loading-pulse" /><div><strong>Loading asset register</strong><p>Connecting to the AssetGuard API.</p></div></div>}
+      {loadState === "loading" && <div className="asset-table-wrap skeleton-table" aria-label="Loading asset register" role="status"><span className="sr-only">Loading asset register</span><SectionSkeleton variant="row" count={5} /></div>}
       {loadState === "error" && <div className="state-panel state-panel-error" role="alert"><span className="state-icon">!</span><div><strong>Asset register unavailable</strong><p>We could not load live assets. Check that the backend is running and try again.</p></div></div>}
       {loadState === "ready" && assets.length === 0 && <div className="state-panel"><span className="state-icon">—</span><div><strong>No assets registered</strong><p>The asset register is currently empty.</p></div></div>}
       {loadState === "ready" && assets.length > 0 && <div className="asset-table-wrap"><div className="asset-table" role="table" aria-label="Assets">

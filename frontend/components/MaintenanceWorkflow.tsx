@@ -362,7 +362,7 @@ export function MaintenanceRecordList({
               {canCancel && (
                 <button
                   type="button"
-                  className="quiet-button"
+                  className="quiet-button terminal-button"
                   disabled={Boolean(action)}
                   onClick={() => setPanels((current) => ({
                     ...current,
