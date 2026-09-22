@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user, require_roles
 from app.db.session import get_db
 from app.schemas.maintenance_record import (
     MaintenanceCancelRequest,
@@ -18,7 +19,7 @@ from app.schemas.maintenance_record import (
 from app.services import maintenance_record_service
 
 
-router = APIRouter(tags=["maintenance-records"])
+router = APIRouter(tags=["maintenance-records"], dependencies=[Depends(get_current_user)])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
@@ -37,6 +38,7 @@ def _transition_error(exc: maintenance_record_service.InvalidMaintenanceTransiti
     "/api/assets/{asset_id}/maintenance-records",
     response_model=MaintenanceRecordRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("engineer", "admin"))],
 )
 def create_maintenance_record(asset_id: UUID, record_data: MaintenanceRecordCreate, db: DatabaseSession):
     try:
@@ -79,7 +81,8 @@ def get_maintenance_record(record_id: UUID, db: DatabaseSession):
     return _get_record_or_404(db, record_id)
 
 
-@router.patch("/api/maintenance-records/{record_id}", response_model=MaintenanceRecordRead)
+@router.patch("/api/maintenance-records/{record_id}", response_model=MaintenanceRecordRead,
+              dependencies=[Depends(require_roles("engineer", "admin"))])
 def update_maintenance_record(
     record_id: UUID, record_data: MaintenanceRecordUpdate, db: DatabaseSession
 ):
@@ -87,7 +90,8 @@ def update_maintenance_record(
     return maintenance_record_service.update_maintenance_record(db, record, record_data)
 
 
-@router.post("/api/maintenance-records/{record_id}/start", response_model=MaintenanceRecordRead)
+@router.post("/api/maintenance-records/{record_id}/start", response_model=MaintenanceRecordRead,
+             dependencies=[Depends(require_roles("technician", "engineer", "admin"))])
 def start_maintenance(record_id: UUID, request: MaintenanceStartRequest, db: DatabaseSession):
     record = _get_record_or_404(db, record_id)
     try:
@@ -96,7 +100,8 @@ def start_maintenance(record_id: UUID, request: MaintenanceStartRequest, db: Dat
         raise _transition_error(exc) from exc
 
 
-@router.post("/api/maintenance-records/{record_id}/complete", response_model=MaintenanceRecordRead)
+@router.post("/api/maintenance-records/{record_id}/complete", response_model=MaintenanceRecordRead,
+             dependencies=[Depends(require_roles("technician", "engineer", "admin"))])
 def complete_maintenance(record_id: UUID, request: MaintenanceCompleteRequest, db: DatabaseSession):
     record = _get_record_or_404(db, record_id)
     try:
@@ -105,7 +110,8 @@ def complete_maintenance(record_id: UUID, request: MaintenanceCompleteRequest, d
         raise _transition_error(exc) from exc
 
 
-@router.post("/api/maintenance-records/{record_id}/cancel", response_model=MaintenanceRecordRead)
+@router.post("/api/maintenance-records/{record_id}/cancel", response_model=MaintenanceRecordRead,
+             dependencies=[Depends(require_roles("engineer", "admin"))])
 def cancel_maintenance(record_id: UUID, request: MaintenanceCancelRequest, db: DatabaseSession):
     record = _get_record_or_404(db, record_id)
     try:

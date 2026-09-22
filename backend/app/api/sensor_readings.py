@@ -5,12 +5,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user, require_roles
 from app.db.session import get_db
 from app.schemas.sensor_reading import SensorReadingCreate, SensorReadingRead
 from app.services import sensor_reading_service, sensor_service
 
 
-router = APIRouter(tags=["sensor readings"])
+router = APIRouter(tags=["sensor readings"], dependencies=[Depends(get_current_user)])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
@@ -31,6 +32,8 @@ def _ensure_timezone_aware(value: datetime | None, field_name: str) -> None:
     "/api/sensors/{sensor_id}/readings",
     response_model=SensorReadingRead,
     status_code=status.HTTP_201_CREATED,
+    # Replace this user role gate with a scoped machine credential when device ingestion is introduced.
+    dependencies=[Depends(require_roles("admin"))],
 )
 def create_sensor_reading(sensor_id: UUID, reading_data: SensorReadingCreate, db: DatabaseSession):
     _ensure_sensor_exists(db, sensor_id)

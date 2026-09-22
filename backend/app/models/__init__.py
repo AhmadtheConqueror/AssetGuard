@@ -4,6 +4,7 @@ from app.models.asset import Asset
 from app.models.maintenance_record import MaintenanceRecord
 from app.models.sensor import Sensor
 from app.models.sensor_reading import SensorReading
+from app.models.user import User
 
 __all__ = [
     "AIAnalysis",
@@ -12,4 +13,5 @@ __all__ = [
     "MaintenanceRecord",
     "Sensor",
     "SensorReading",
+    "User",
 ]

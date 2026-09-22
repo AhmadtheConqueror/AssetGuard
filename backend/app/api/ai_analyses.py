@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user, require_roles
 from app.ai.base import (
     AIAnalyzerConfigurationError,
     AIAnalyzerResponseError,
@@ -14,7 +15,7 @@ from app.schemas.ai_analysis import AIAnalysisRead
 from app.services import ai_analysis_service
 
 
-router = APIRouter(tags=["AI analyses"])
+router = APIRouter(tags=["AI analyses"], dependencies=[Depends(get_current_user)])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
@@ -26,6 +27,7 @@ def _asset_not_found() -> HTTPException:
     "/api/assets/{asset_id}/ai-analyses",
     response_model=AIAnalysisRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("engineer", "admin"))],
 )
 def create_ai_analysis(
     asset_id: UUID,

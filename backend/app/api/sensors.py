@@ -4,12 +4,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_current_user, require_roles
 from app.db.session import get_db
 from app.schemas.sensor import SensorCreate, SensorRead, SensorUpdate
 from app.services import asset_service, sensor_service
 
 
-router = APIRouter(tags=["sensors"])
+router = APIRouter(tags=["sensors"], dependencies=[Depends(get_current_user)])
 DatabaseSession = Annotated[Session, Depends(get_db)]
 
 
@@ -29,6 +30,7 @@ def _get_sensor_or_404(db: Session, sensor_id: UUID):
     "/api/assets/{asset_id}/sensors",
     response_model=SensorRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles("admin"))],
 )
 def create_sensor(asset_id: UUID, sensor_data: SensorCreate, db: DatabaseSession):
     _ensure_asset_exists(db, asset_id)
@@ -51,13 +53,15 @@ def get_sensor(sensor_id: UUID, db: DatabaseSession):
     return _get_sensor_or_404(db, sensor_id)
 
 
-@router.patch("/api/sensors/{sensor_id}", response_model=SensorRead)
+@router.patch("/api/sensors/{sensor_id}", response_model=SensorRead,
+              dependencies=[Depends(require_roles("admin"))])
 def update_sensor(sensor_id: UUID, sensor_data: SensorUpdate, db: DatabaseSession):
     sensor = _get_sensor_or_404(db, sensor_id)
     return sensor_service.update_sensor(db, sensor, sensor_data)
 
 
-@router.delete("/api/sensors/{sensor_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/api/sensors/{sensor_id}", status_code=status.HTTP_204_NO_CONTENT,
+               dependencies=[Depends(require_roles("admin"))])
 def delete_sensor(sensor_id: UUID, db: DatabaseSession) -> Response:
     sensor = _get_sensor_or_404(db, sensor_id)
     sensor_service.delete_sensor(db, sensor)
