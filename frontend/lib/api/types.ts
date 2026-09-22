@@ -34,6 +34,31 @@ export interface AIAnalysis {
   created_at: string;
 }
 
+export interface AIAnalysisCreateInput {
+  limit_per_sensor?: number;
+}
+
+export interface AIFinding {
+  sensor: string;
+  observation: string;
+  evidence: string;
+  significance: string;
+}
+
+export interface AIRecommendedAction {
+  action: string;
+  rationale: string;
+  priority: "low" | "moderate" | "high" | "critical";
+}
+
+export interface AIAnalysisFindings {
+  model_findings?: AIFinding[];
+  limitations?: string[];
+  analysis_window?: Record<string, unknown>;
+  deterministic_sensor_metrics?: unknown[];
+  provider_execution?: Record<string, unknown>;
+}
+
 export interface Sensor {
   id: string;
   asset_id: string;

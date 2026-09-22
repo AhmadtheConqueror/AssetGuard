@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
+  ApiError,
+  createAIAnalysis,
   getAIAnalyses,
   getAlerts,
   getAsset,
@@ -16,6 +18,9 @@ import { AlertList } from "@/components/AlertWorkflow";
 import { CreateMaintenanceForm, MaintenanceEmptyState, MaintenanceRecordList } from "@/components/MaintenanceWorkflow";
 import type {
   AIAnalysis,
+  AIAnalysisFindings,
+  AIFinding,
+  AIRecommendedAction,
   Alert,
   Asset,
   MaintenanceRecord,
@@ -60,11 +65,21 @@ function SectionState({ title, detail, error = false }: { title: string; detail:
   return <div className={`detail-state ${error ? "detail-state-error" : ""}`} role={error ? "alert" : undefined}><strong>{title}</strong><p>{detail}</p></div>;
 }
 
-function ValueList({ value }: { value: Record<string, unknown> | unknown[] | null }) {
-  if (!value) return null;
-  const entries = Array.isArray(value) ? value.map((item, index) => [String(index + 1), item] as const) : Object.entries(value);
+function isFinding(value: unknown): value is AIFinding {
+  return Boolean(value && typeof value === "object" && "sensor" in value && "observation" in value);
+}
 
-  return <ul className="ai-value-list">{entries.map(([key, item]) => <li key={key}><span>{key}</span><strong>{typeof item === "object" ? JSON.stringify(item) : String(item)}</strong></li>)}</ul>;
+function isRecommendedAction(value: unknown): value is AIRecommendedAction {
+  return Boolean(value && typeof value === "object" && "action" in value && "rationale" in value);
+}
+
+function AnalysisCard({ analysis }: { analysis: AIAnalysis }) {
+  const findingsPayload = !Array.isArray(analysis.findings) && analysis.findings ? analysis.findings as AIAnalysisFindings : null;
+  const findings = (findingsPayload?.model_findings ?? (Array.isArray(analysis.findings) ? analysis.findings : [])).filter(isFinding);
+  const actions = (Array.isArray(analysis.recommended_actions) ? analysis.recommended_actions : []).filter(isRecommendedAction);
+  const limitations = findingsPayload?.limitations?.filter((item): item is string => typeof item === "string") ?? [];
+
+  return <article className="analysis-card"><div className="analysis-card-header"><div><span>{formatDateTime(analysis.analyzed_at)}</span><h4>{analysis.risk_level ?? "Recorded analysis"}</h4></div>{analysis.risk_score !== null && <strong>{Math.round(analysis.risk_score * 100)}%</strong>}</div><p className="analysis-summary">{analysis.summary}</p><div className="analysis-facts"><span>Anomaly detected <b>{analysis.anomaly_detected ? "Yes" : "No"}</b></span>{analysis.model_provider && <span>Provider <b>{analysis.model_provider}</b></span>}{analysis.model_name && <span>Model <b>{analysis.model_name}</b></span>}</div>{findings.length > 0 && <div className="analysis-detail-group"><h5>Findings</h5><div className="analysis-entry-list">{findings.map((finding, index) => <div key={`${finding.sensor}-${index}`}><div className="analysis-entry-heading"><strong>{finding.sensor}</strong></div><p>{finding.observation}</p>{finding.evidence && <small>Evidence: {finding.evidence}</small>}{finding.significance && <small>Significance: {finding.significance}</small>}</div>)}</div></div>}{actions.length > 0 && <div className="analysis-detail-group"><h5>Recommended actions</h5><div className="analysis-entry-list">{actions.map((action, index) => <div key={`${action.action}-${index}`}><div className="analysis-entry-heading"><strong>{action.action}</strong><StatusBadge value={action.priority} /></div><p>{action.rationale}</p></div>)}</div></div>}{limitations.length > 0 && <div className="analysis-detail-group analysis-limitations"><h5>Limitations</h5><ul>{limitations.map((limitation, index) => <li key={`${limitation}-${index}`}>{limitation}</li>)}</ul></div>}</article>;
 }
 
 function AssetHeader({ asset }: { asset: Asset }) {
@@ -101,8 +116,33 @@ function TelemetrySection({ state, sensors }: { state: LoadState; sensors: Senso
   return <section id="telemetry" className="detail-section-block" aria-labelledby="telemetry-title"><div className="detail-section-heading"><div><p className="section-kicker">Live measurements</p><h3 id="telemetry-title">Sensors & Telemetry</h3></div><span className="detail-section-meta">{sensors.length} sensors</span></div>{state === "loading" && <SectionState title="Loading sensor telemetry" detail="Fetching sensors and recent readings." />}{state === "error" && <SectionState title="Telemetry unavailable" detail="This section could not load from the backend." error />}{state === "ready" && sensors.length === 0 && <SectionState title="No sensors registered" detail="No sensors are attached to this asset." />}{state === "ready" && sensors.length > 0 && <div className="detail-telemetry-content"><div className="detail-sensor-grid">{sensors.map(({ sensor, latest }, index) => <article className="detail-sensor-card" style={{ "--sensor-color": sensorColors[index % sensorColors.length] } as React.CSSProperties} key={sensor.id}><div className="detail-sensor-label"><span className="sensor-signal" aria-hidden="true" />{sensor.sensor_type}<StatusBadge value={sensor.status} /></div><h4>{sensor.name}</h4><strong>{formatValue(latest?.value ?? null, sensor.unit)}</strong><p>{latest ? formatDateTime(latest.recorded_at) : "No reading available"}</p>{latest?.quality && <small>Quality: {latest.quality}</small>}</article>)}</div><div className="detail-trend-grid">{sensors.map(({ sensor, readings }) => <TrendChart key={sensor.id} sensorName={sensor.name} unit={sensor.unit} readings={readings} />)}</div></div>}</section>;
 }
 
-function AISection({ state, analyses }: { state: LoadState; analyses: AIAnalysis[] }) {
-  return <section id="ai-analysis" className="detail-section-block" aria-labelledby="ai-title"><div className="detail-section-heading"><div><p className="section-kicker">Passive record</p><h3 id="ai-title">AI Analysis</h3></div><span className="detail-section-meta">Read only</span></div>{state === "loading" && <SectionState title="Loading analysis history" detail="Checking for previously stored analyses." />}{state === "error" && <SectionState title="Analysis history unavailable" detail="The AI analysis history could not be retrieved." error />}{state === "ready" && analyses.length === 0 && <SectionState title="No AI analysis available yet." detail="Analysis invocation is intentionally not available in this phase." />}{state === "ready" && analyses.length > 0 && <div className="analysis-list">{analyses.map((analysis) => <article className="analysis-card" key={analysis.id}><div className="analysis-card-header"><div><span>{formatDateTime(analysis.analyzed_at)}</span><h4>{analysis.risk_level ?? "Recorded analysis"}</h4></div>{analysis.risk_score !== null && <strong>{analysis.risk_score.toFixed(2)}</strong>}</div><p className="analysis-summary">{analysis.summary}</p><div className="analysis-facts"><span>Anomaly detected <b>{analysis.anomaly_detected ? "Yes" : "No"}</b></span>{analysis.model_provider && <span>Provider <b>{analysis.model_provider}</b></span>}{analysis.model_name && <span>Model <b>{analysis.model_name}</b></span>}</div><ValueList value={analysis.findings} /><ValueList value={analysis.recommended_actions} /></article>)}</div>}</section>;
+function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: LoadState; analyses: AIAnalysis[]; assetId: string; onAnalysisCreated: (analysis: AIAnalysis) => void }) {
+  const [isRunning, setIsRunning] = useState(false);
+  const [runError, setRunError] = useState<{ title: string; detail: string } | null>(null);
+  const [runSuccess, setRunSuccess] = useState(false);
+
+  async function runAnalysis() {
+    setIsRunning(true);
+    setRunError(null);
+    setRunSuccess(false);
+    try {
+      const analysis = await createAIAnalysis(assetId);
+      onAnalysisCreated(analysis);
+      setRunSuccess(true);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 503) {
+        setRunError({ title: "AI analysis is temporarily unavailable", detail: "The analysis service could not complete this request. Existing history remains available; try again later." });
+      } else if (error instanceof ApiError && error.status === 422) {
+        setRunError({ title: "More telemetry is needed", detail: error.message });
+      } else {
+        setRunError({ title: "AI analysis could not be completed", detail: error instanceof Error ? error.message : "Please try again later." });
+      }
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  return <section id="ai-analysis" className="detail-section-block" aria-labelledby="ai-title"><div className="detail-section-heading"><div><p className="section-kicker">Telemetry assessment</p><h3 id="ai-title">AI Analysis</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{analyses.length} recorded</span>{state === "ready" && <button type="button" className="primary-small-button" onClick={() => void runAnalysis()} disabled={isRunning}>{isRunning ? "Running Analysis..." : "Run AI Analysis"}</button>}</div></div>{runSuccess && <div className="analysis-run-notice analysis-run-success" role="status"><strong>Analysis complete</strong><span>The latest result has been added to the history below.</span></div>}{runError && <div className="analysis-run-notice analysis-run-error" role="alert"><strong>{runError.title}</strong><span>{runError.detail}</span></div>}{state === "loading" && <SectionState title="Loading analysis history" detail="Checking for previously stored analyses." />}{state === "error" && <SectionState title="Analysis history unavailable" detail="The AI analysis history could not be retrieved." error />}{state === "ready" && analyses.length === 0 && <SectionState title="No AI analysis available yet" detail="Run an analysis to assess the latest stored telemetry for this asset." />}{state === "ready" && analyses.length > 0 && <div className="analysis-list">{analyses.map((analysis) => <AnalysisCard analysis={analysis} key={analysis.id} />)}</div>}</section>;
 }
 
 function AlertsSection({ state, alerts, asset, onAlertChange }: { state: LoadState; alerts: Alert[]; asset: Asset; onAlertChange: (alert: Alert) => void }) {
@@ -145,6 +185,10 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
     setData((current) => ({ ...current, maintenance: [record, ...current.maintenance] }));
   }
 
+  function addAnalysis(analysis: AIAnalysis) {
+    setData((current) => ({ ...current, analyses: [analysis, ...current.analyses.filter((item) => item.id !== analysis.id)] }));
+  }
+
   useEffect(() => {
     let mounted = true;
 
@@ -182,5 +226,5 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   if (assetState === "loading") return <section className="content-section detail-loading"><SectionState title="Loading asset detail" detail="Fetching asset context from the AssetGuard API." /></section>;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
-  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
+  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
 }

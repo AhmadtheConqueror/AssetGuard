@@ -4,6 +4,7 @@ import type {
   AlertResolveInput,
   AlertUpdateInput,
   AIAnalysis,
+  AIAnalysisCreateInput,
   Asset,
   HealthResponse,
   MaintenanceCancelInput,
@@ -142,6 +143,11 @@ export function acknowledgeAlert(alertId: string) {
 
 export function resolveAlert(alertId: string, input: AlertResolveInput) {
   return requestJson<Alert>(`/api/alerts/${alertId}/resolve`, "POST", input);
+}
+
+export function createAIAnalysis(assetId: string, input: AIAnalysisCreateInput = {}) {
+  const limit = input.limit_per_sensor ?? 50;
+  return requestJson<AIAnalysis>(`/api/assets/${assetId}/ai-analyses?limit_per_sensor=${limit}`, "POST", {});
 }
 
 export function createMaintenanceRecord(assetId: string, input: MaintenanceCreateInput) {
