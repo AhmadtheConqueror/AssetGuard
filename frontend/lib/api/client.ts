@@ -17,20 +17,24 @@ import type {
   SensorReading,
 } from "./types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-
-function getApiUrl(path: string) {
-  if (!API_BASE_URL) {
-    throw new Error("NEXT_PUBLIC_API_URL is not configured");
-  }
-
-  return `${API_BASE_URL.replace(/\/$/, "")}${path}`;
+/**
+ * Returns the BFF proxy URL for operational API calls.
+ * All requests are routed through /api/backend/... where the
+ * Next.js route handler attaches the Authorization header server-side.
+ * The JWT never touches browser JavaScript.
+ */
+function getBffUrl(path: string): string {
+  // path always starts with /api/... or /health
+  // Strip leading slash for the catch-all segment
+  const normalised = path.startsWith("/") ? path.slice(1) : path;
+  return `/api/backend/${normalised}`;
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(getApiUrl(path), {
+  const response = await fetch(getBffUrl(path), {
     headers: { Accept: "application/json" },
     cache: "no-store",
+    credentials: "same-origin",
   });
 
   if (!response.ok) {
@@ -40,8 +44,19 @@ async function getJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/**
+ * Health check — calls the public /api/health proxy (no auth required).
+ * Kept separate so the sidebar health indicator works even when the
+ * session is expired.
+ */
 export function getHealth() {
-  return getJson<HealthResponse>("/health");
+  return fetch("/api/health", {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  }).then(async (res) => {
+    if (!res.ok) throw new Error(`Health check failed with status ${res.status}`);
+    return res.json() as Promise<HealthResponse>;
+  });
 }
 
 export function getAssets() {
@@ -109,10 +124,11 @@ function getApiErrorDetail(detail: unknown) {
 }
 
 async function requestJson<T>(path: string, method: "POST" | "PATCH", body: unknown): Promise<T> {
-  const response = await fetch(getApiUrl(path), {
+  const response = await fetch(getBffUrl(path), {
     method,
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    credentials: "same-origin",
   });
 
   if (!response.ok) {

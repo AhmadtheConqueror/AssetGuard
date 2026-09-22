@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
-import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -13,13 +12,14 @@ export const metadata: Metadata = {
   description: "AI-assisted predictive maintenance for critical assets.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="en"
       className={`${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body><AppShell>{children}</AppShell></body>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

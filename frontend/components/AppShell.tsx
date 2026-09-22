@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getHealth } from "@/lib/api/client";
+import { useSession } from "@/lib/auth/SessionContext";
 
 type HealthState = "checking" | "connected" | "unavailable";
 
@@ -36,6 +37,30 @@ function StatusIndicator({ state }: { state: HealthState }) {
     <div className={`status-indicator status-${state}`} aria-live="polite">
       <span className="status-dot" aria-hidden="true" />
       <span>{labels[state]}</span>
+    </div>
+  );
+}
+
+function UserBlock() {
+  const { user, logout } = useSession();
+
+  if (!user) return null;
+
+  return (
+    <div className="user-block">
+      <div className="user-block-info">
+        <span className="user-block-name">{user.full_name}</span>
+        <span className="user-block-role">{user.role.toUpperCase()}</span>
+      </div>
+      <button
+        id="sidebar-logout-btn"
+        type="button"
+        className="logout-button"
+        onClick={() => void logout()}
+        aria-label="Sign out of AssetGuard"
+      >
+        Logout
+      </button>
     </div>
   );
 }
@@ -84,7 +109,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="sidebar-footer">
-          <div className="nav-section-label">System</div>
+          <UserBlock />
+          <div className="nav-section-label" style={{ marginTop: "16px" }}>System</div>
           <StatusIndicator state={healthState} />
           <p className="sidebar-note">Connected to the AssetGuard API</p>
         </div>
