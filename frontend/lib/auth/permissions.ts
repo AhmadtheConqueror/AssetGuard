@@ -6,6 +6,7 @@ export type Permission =
   | "manageSensors"
   | "createSensorReading"
   | "runAIAnalysis"
+  | "runConditionAssessment"
   | "createAlert"
   | "editAlert"
   | "acknowledgeAlert"
@@ -37,6 +38,7 @@ const rolePermissions: Record<UserRole, ReadonlySet<Permission>> = {
     "manageSensors",
     "createSensorReading",
     "runAIAnalysis",
+    "runConditionAssessment",
     "createAlert",
     "editAlert",
     "acknowledgeAlert",
@@ -51,6 +53,7 @@ const rolePermissions: Record<UserRole, ReadonlySet<Permission>> = {
   engineer: new Set([
     "readOperational",
     "runAIAnalysis",
+    "runConditionAssessment",
     "createAlert",
     "editAlert",
     "acknowledgeAlert",

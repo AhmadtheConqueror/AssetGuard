@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   getAlerts,
   getAssets,
+  getConditionAssessments,
   getLatestSensorReading,
   getMaintenanceRecords,
   getSensorReadings,
@@ -13,6 +14,7 @@ import {
 import type {
   Alert,
   Asset,
+  ConditionAssessment,
   MaintenanceRecord,
   Sensor,
   SensorReading,
@@ -34,9 +36,11 @@ interface AssetSnapshot {
   sensors: SensorSnapshot[];
   alerts: Alert[];
   maintenance: MaintenanceRecord[];
+  condition: ConditionAssessment | null;
   sensorsState: SectionState;
   alertsState: SectionState;
   maintenanceState: SectionState;
+  conditionState: SectionState;
 }
 
 interface TrendChartProps {
@@ -178,10 +182,11 @@ export function OperationalDashboard() {
         const assets = await getAssets();
         const snapshots = await Promise.all(assets.map(async (asset): Promise<AssetSnapshot> => {
           const previousAsset = lastSnapshots.find((snapshot) => snapshot.asset.id === asset.id);
-          const [sensorsResult, alertsResult, maintenanceResult] = await Promise.allSettled([
+          const [sensorsResult, alertsResult, maintenanceResult, conditionResult] = await Promise.allSettled([
             getSensors(asset.id),
             getAlerts(asset.id),
             getMaintenanceRecords(asset.id),
+            getConditionAssessments(asset.id),
           ]);
           const sensors = sensorsResult.status === "fulfilled" ? sensorsResult.value : previousAsset?.sensors.map(({ sensor }) => sensor) ?? [];
           const sensorSnapshots = await Promise.all(sensors.map(async (sensor) => {
@@ -199,9 +204,11 @@ export function OperationalDashboard() {
             sensors: sensorSnapshots,
             alerts: alertsResult.status === "fulfilled" ? alertsResult.value : previousAsset?.alerts ?? [],
             maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : previousAsset?.maintenance ?? [],
+            condition: conditionResult.status === "fulfilled" ? conditionResult.value[0] ?? null : previousAsset?.condition ?? null,
             sensorsState: sensorsResult.status === "fulfilled" ? "ready" : previousAsset?.sensorsState ?? "error",
             alertsState: alertsResult.status === "fulfilled" ? "ready" : previousAsset?.alertsState ?? "error",
             maintenanceState: maintenanceResult.status === "fulfilled" ? "ready" : previousAsset?.maintenanceState ?? "error",
+            conditionState: conditionResult.status === "fulfilled" ? "ready" : previousAsset?.conditionState ?? "error",
           };
         }));
 
@@ -243,7 +250,7 @@ export function OperationalDashboard() {
       {assetsState === "error" && <SectionMessage title="Dashboard data unavailable" detail="The asset register could not be reached. The shell remains available while the backend is offline." error />}
       {assetsState === "ready" && assetSnapshots.length === 0 && <SectionMessage title="No assets registered" detail="Add an asset through the backend before using the operational dashboard." />}
       {assetsState === "ready" && assetSnapshots.map((snapshot) => <div key={snapshot.asset.id} className="asset-dashboard-group">
-        <section className="asset-overview-row"><div><p className="section-kicker">Monitored asset</p><Link href={`/assets/${snapshot.asset.id}`} className="asset-overview-link"><h2>{snapshot.asset.name}</h2><span>{snapshot.asset.asset_code}</span></Link></div><div className="asset-overview-facts"><span><b>Type</b>{snapshot.asset.asset_type}</span><span><b>Location</b>{snapshot.asset.location ?? "Not set"}</span><span><b>Status</b><StatusBadge value={snapshot.asset.status} /></span></div></section>
+        <section className="asset-overview-row"><div><p className="section-kicker">Monitored asset</p><Link href={`/assets/${snapshot.asset.id}`} className="asset-overview-link"><h2>{snapshot.asset.name}</h2><span>{snapshot.asset.asset_code}</span></Link></div><div className="asset-overview-facts"><span><b>Type</b>{snapshot.asset.asset_type}</span><span><b>Location</b>{snapshot.asset.location ?? "Not set"}</span><span><b>Status</b><StatusBadge value={snapshot.asset.status} /></span><span><b>Condition</b>{snapshot.conditionState === "ready" && snapshot.condition ? <StatusBadge value={snapshot.condition.status} /> : <span className="condition-unavailable">Not evaluated</span>}</span></div></section>
         <AssetTelemetry snapshot={snapshot} lastUpdated={lastUpdated} />
         <div className="summary-grid"><AlertsSummary snapshot={snapshot} /><MaintenanceSummary snapshot={snapshot} /></div>
       </div>)}

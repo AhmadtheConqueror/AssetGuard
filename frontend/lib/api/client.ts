@@ -6,6 +6,7 @@ import type {
   AIAnalysis,
   AIAnalysisCreateInput,
   Asset,
+  ConditionAssessment,
   HealthResponse,
   MaintenanceCancelInput,
   MaintenanceCompleteInput,
@@ -102,6 +103,10 @@ export function getAIAnalyses(assetId: string) {
   return getJson<AIAnalysis[]>(`/api/assets/${assetId}/ai-analyses`);
 }
 
+export function getConditionAssessments(assetId: string) {
+  return getJson<ConditionAssessment[]>(`/api/assets/${assetId}/condition-assessments`);
+}
+
 export function getLatestAIAnalysis(assetId: string) {
   return getJson<AIAnalysis>(`/api/assets/${assetId}/ai-analyses/latest`);
 }
@@ -183,6 +188,10 @@ export function resolveAlert(alertId: string, input: AlertResolveInput) {
 export function createAIAnalysis(assetId: string, input: AIAnalysisCreateInput = {}) {
   const limit = input.limit_per_sensor ?? 50;
   return requestJson<AIAnalysis>(`/api/assets/${assetId}/ai-analyses?limit_per_sensor=${limit}`, "POST", {});
+}
+
+export function createConditionAssessment(assetId: string) {
+  return requestJson<ConditionAssessment>(`/api/assets/${assetId}/condition-assessments`, "POST", {});
 }
 
 export function createMaintenanceRecord(assetId: string, input: MaintenanceCreateInput) {

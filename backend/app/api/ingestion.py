@@ -1,3 +1,4 @@
+import logging
 from secrets import compare_digest
 from typing import Annotated
 
@@ -15,11 +16,17 @@ from app.schemas.ingestion import (
     IngestionSensor,
     IngestionSensorDiscovery,
 )
-from app.services import asset_service, sensor_reading_service, sensor_service
+from app.services import (
+    asset_service,
+    condition_assessment_service,
+    sensor_reading_service,
+    sensor_service,
+)
 
 
 router = APIRouter(prefix="/api/ingestion", tags=["ingestion"])
 DatabaseSession = Annotated[Session, Depends(get_db)]
+logger = logging.getLogger(__name__)
 
 
 def require_ingestion_key(
@@ -56,6 +63,16 @@ def ingest_readings(batch: IngestionBatch, db: DatabaseSession, _: IngestionAuth
     accepted_count, duplicate_count = sensor_reading_service.create_sensor_readings_idempotently(
         db, batch.readings
     )
+    if accepted_count:
+        asset_ids = set(
+            db.scalars(select(Sensor.asset_id).where(Sensor.id.in_(sensor_ids))).all()
+        )
+        for asset_id in asset_ids:
+            try:
+                condition_assessment_service.evaluate_asset(db, asset_id)
+            except Exception:
+                db.rollback()
+                logger.exception("Condition monitoring failed after telemetry ingestion")
     return IngestionResult(
         source=batch.source,
         received_count=len(batch.readings),

@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.session import SessionLocal
 from app.main import app
-from app.models import Asset, Sensor, SensorReading, User
+from app.models import AIAnalysis, Alert, Asset, ConditionAssessment, Sensor, SensorReading, User
 from app.schemas.user import UserCreate
 from app.services import user_service
 
@@ -47,6 +47,7 @@ def ingestion_fixture(monkeypatch: pytest.MonkeyPatch):
     yield asset_code, sensor_ids
 
     with SessionLocal() as db:
+        db.execute(delete(ConditionAssessment).where(ConditionAssessment.asset_id == asset_id))
         db.execute(delete(SensorReading).where(SensorReading.sensor_id.in_(sensor_ids)))
         db.execute(delete(Sensor).where(Sensor.id.in_(sensor_ids)))
         db.execute(delete(Asset).where(Asset.id == asset_id))
@@ -99,6 +100,14 @@ def test_batch_ingestion_and_duplicate_retry(ingestion_fixture) -> None:
     with SessionLocal() as db:
         count = db.scalar(select(func.count()).select_from(SensorReading).where(SensorReading.sensor_id.in_(sensor_ids)))
         assert count == 2
+        assessment_count = db.scalar(
+            select(func.count()).select_from(ConditionAssessment).where(
+                ConditionAssessment.asset_id == db.get(Sensor, sensor_ids[0]).asset_id
+            )
+        )
+        assert assessment_count == 1
+        assert db.scalar(select(func.count()).select_from(Alert).where(Alert.asset_id == db.get(Sensor, sensor_ids[0]).asset_id)) == 0
+        assert db.scalar(select(func.count()).select_from(AIAnalysis).where(AIAnalysis.asset_id == db.get(Sensor, sensor_ids[0]).asset_id)) == 0
 
 
 def test_ingestion_validation_is_atomic(ingestion_fixture) -> None:
@@ -155,3 +164,31 @@ def test_discovery_and_existing_jwt_api(ingestion_fixture) -> None:
         with SessionLocal() as db:
             db.execute(delete(User).where(User.id == user_id))
             db.commit()
+
+
+def test_monitoring_failure_does_not_rollback_readings(
+    ingestion_fixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, sensor_ids = ingestion_fixture
+
+    def fail_monitoring(*_args, **_kwargs):
+        raise RuntimeError("test monitoring failure")
+
+    monkeypatch.setattr(
+        "app.api.ingestion.condition_assessment_service.evaluate_asset",
+        fail_monitoring,
+    )
+    payload = _payload(sensor_ids[:1])
+    response = client.post(
+        "/api/ingestion/readings",
+        json=payload,
+        headers={HEADER_NAME: TEST_KEY},
+    )
+    assert response.status_code == 201
+    assert response.json()["accepted_count"] == 1
+    with SessionLocal() as db:
+        assert db.scalar(
+            select(func.count()).select_from(SensorReading).where(
+                SensorReading.sensor_id == sensor_ids[0]
+            )
+        ) == 1

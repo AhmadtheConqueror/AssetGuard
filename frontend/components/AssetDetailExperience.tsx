@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import {
   ApiError,
   createAIAnalysis,
+  createConditionAssessment,
   getAIAnalyses,
   getAlerts,
   getAsset,
+  getConditionAssessments,
   getLatestSensorReading,
   getMaintenanceRecords,
   getSensorReadings,
@@ -28,6 +30,7 @@ import type {
   AIRecommendedAction,
   Alert,
   Asset,
+  ConditionAssessment,
   MaintenanceRecord,
   Sensor,
   SensorReading,
@@ -47,11 +50,13 @@ interface DetailData {
   analyses: AIAnalysis[];
   alerts: Alert[];
   maintenance: MaintenanceRecord[];
+  assessments: ConditionAssessment[];
 }
 
 const sections = [
   { id: "overview", label: "Overview" },
   { id: "telemetry", label: "Sensors & Telemetry" },
+  { id: "condition-monitoring", label: "Condition Monitoring" },
   { id: "ai-analysis", label: "AI Analysis" },
   { id: "alerts", label: "Alerts" },
   { id: "maintenance", label: "Maintenance" },
@@ -151,6 +156,54 @@ function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: Loa
   return <section id="ai-analysis" className="detail-section-block" aria-labelledby="ai-title"><div className="detail-section-heading"><div><p className="section-kicker">Telemetry assessment</p><h3 id="ai-title">AI Analysis</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{analyses.length} recorded</span>{state === "ready" && canRunAnalysis && <button type="button" className="primary-small-button" onClick={() => void runAnalysis()} disabled={isRunning}>{isRunning ? "Running Analysis..." : "Run AI Analysis"}</button>}</div></div>{runSuccess && <div className="analysis-run-notice analysis-run-success" role="status"><strong>Analysis complete</strong><span>The latest result has been added to the history below.</span></div>}{runError && <div className="analysis-run-notice analysis-run-error" role="alert"><strong>{runError.title}</strong><span>{runError.detail}</span></div>}{state === "loading" && <SectionState title="Loading analysis history" detail="Checking for previously stored analyses." />}{state === "error" && <SectionState title="Analysis history unavailable" detail="The AI analysis history could not be retrieved." error />}{state === "ready" && analyses.length === 0 && <SectionState title="No AI analysis available yet" detail={canRunAnalysis ? "Run an analysis to assess the latest stored telemetry for this asset." : "No AI analysis has been recorded for this asset."} />}{state === "ready" && analyses.length > 0 && <div className="analysis-list">{analyses.map((analysis) => <AnalysisCard analysis={analysis} key={analysis.id} />)}</div>}</section>;
 }
 
+function ConditionSection({
+  state,
+  assessments,
+  assetId,
+  onAssessment,
+}: {
+  state: LoadState;
+  assessments: ConditionAssessment[];
+  assetId: string;
+  onAssessment: (assessment: ConditionAssessment) => void;
+}) {
+  const { user } = useSession();
+  const [isRunning, setIsRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+  const canRun = hasPermission(user, "runConditionAssessment");
+  const latest = assessments[0] ?? null;
+
+  async function runAssessment() {
+    setIsRunning(true);
+    setRunError(null);
+    try {
+      onAssessment(await createConditionAssessment(assetId));
+    } catch (error) {
+      setRunError(
+        error instanceof ApiError && error.status === 403
+          ? PERMISSION_DENIED_MESSAGE
+          : error instanceof Error ? error.message : "Condition assessment could not be completed.",
+      );
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  return <section id="condition-monitoring" className="detail-section-block condition-section" aria-labelledby="condition-title">
+    <div className="detail-section-heading"><div><p className="section-kicker">Statistical condition signal</p><h3 id="condition-title">Condition Monitoring</h3></div><div className="detail-heading-actions">{latest && <StatusBadge value={latest.status} />}{state === "ready" && canRun && <button type="button" className="primary-small-button" onClick={() => void runAssessment()} disabled={isRunning}>{isRunning ? "Evaluating..." : latest ? "Re-evaluate" : "Run Assessment"}</button>}</div></div>
+    <p className="condition-disclaimer">Statistical condition signal based on recent history. This is not an OEM safety alarm.</p>
+    {runError && <div className="analysis-run-notice analysis-run-error" role="alert"><strong>Assessment unavailable</strong><span>{runError}</span></div>}
+    {state === "loading" && <SectionState title="Loading condition history" detail="Fetching deterministic condition assessments." />}
+    {state === "error" && <SectionState title="Condition monitoring unavailable" detail="Condition history could not be retrieved." error />}
+    {state === "ready" && !latest && <SectionState title="No condition assessment yet" detail={canRun ? "Run an assessment or wait for the next telemetry ingestion cycle." : "An assessment will appear after new telemetry is evaluated."} />}
+    {state === "ready" && latest && <>
+      <div className="condition-summary"><div><span>Evaluated</span><strong>{formatDateTime(latest.evaluated_at)}</strong></div><div><span>Telemetry through</span><strong>{formatDateTime(latest.evaluated_through)}</strong></div><p>{latest.summary}</p></div>
+      <div className="condition-finding-grid">{latest.findings.map((finding) => <article className="condition-finding" key={finding.sensor_id}><div><h4>{finding.sensor_name}</h4><StatusBadge value={finding.finding_status} /></div><strong>{formatValue(finding.latest_value, finding.unit)}</strong><dl><div><dt>Trend</dt><dd>{finding.trend_direction}</dd></div><div><dt>Baseline</dt><dd>{formatValue(finding.baseline_value, finding.unit)}</dd></div><div><dt>Deviation</dt><dd>{finding.deviation_score === null ? "Not available" : `${finding.deviation_score > 0 ? "+" : ""}${finding.deviation_score.toFixed(2)} robust scale`}</dd></div></dl><p>{finding.explanation}</p></article>)}</div>
+      {assessments.length > 1 && <div className="condition-history"><h4>Recent history</h4>{assessments.slice(1, 6).map((assessment) => <div key={assessment.id}><StatusBadge value={assessment.status} /><span>{formatDateTime(assessment.evaluated_at)}</span><p>{assessment.summary}</p></div>)}</div>}
+    </>}
+  </section>;
+}
+
 function AlertsSection({ state, alerts, asset, onAlertChange }: { state: LoadState; alerts: Alert[]; asset: Asset; onAlertChange: (alert: Alert) => void }) {
   return <section id="alerts" className="detail-section-block" aria-labelledby="alerts-title"><div className="detail-section-heading"><div><p className="section-kicker">Signal history</p><h3 id="alerts-title">Alerts</h3></div><span className="detail-section-meta">{alerts.length} recorded</span></div>{state === "loading" && <SectionState title="Loading alert history" detail="Fetching alerts for this asset." />}{state === "error" && <SectionState title="Alerts unavailable" detail="The alert history could not be retrieved." error />}{state === "ready" && alerts.length === 0 && <SectionState title="No alerts recorded for this asset." detail="There are no alert records to review." />}{state === "ready" && alerts.length > 0 && <AlertList alerts={alerts} assets={[asset]} showAsset={false} onAlertChange={onAlertChange} />}</section>;
 }
@@ -178,8 +231,8 @@ function MaintenanceSection({
 export function AssetDetailExperience({ assetId }: { assetId: string }) {
   const [asset, setAsset] = useState<Asset | null>(null);
   const [assetState, setAssetState] = useState<LoadState>("loading");
-  const [data, setData] = useState<DetailData>({ loading: true, sensors: [], analyses: [], alerts: [], maintenance: [] });
-  const [states, setStates] = useState({ sensors: "loading" as LoadState, ai: "loading" as LoadState, alerts: "loading" as LoadState, maintenance: "loading" as LoadState });
+  const [data, setData] = useState<DetailData>({ loading: true, sensors: [], analyses: [], alerts: [], maintenance: [], assessments: [] });
+  const [states, setStates] = useState({ sensors: "loading" as LoadState, condition: "loading" as LoadState, ai: "loading" as LoadState, alerts: "loading" as LoadState, maintenance: "loading" as LoadState });
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   function replaceAlert(updatedAlert: Alert) {
@@ -196,6 +249,10 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
 
   function addAnalysis(analysis: AIAnalysis) {
     setData((current) => ({ ...current, analyses: [analysis, ...current.analyses.filter((item) => item.id !== analysis.id)] }));
+  }
+
+  function addAssessment(assessment: ConditionAssessment) {
+    setData((current) => ({ ...current, assessments: [assessment, ...current.assessments.filter((item) => item.id !== assessment.id)] }));
   }
 
   useEffect(() => {
@@ -222,6 +279,15 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
         setData((current) => ({ ...current, sensors: sensorSnapshots }));
         setStates((current) => ({ ...current, sensors: "ready" }));
         setLastUpdated(new Date());
+        try {
+          const assessments = await getConditionAssessments(assetId);
+          if (mounted) {
+            setData((current) => ({ ...current, assessments }));
+            setStates((current) => ({ ...current, condition: "ready" }));
+          }
+        } catch {
+          // Preserve the last successful condition history during a polling failure.
+        }
       } catch {
         if (mounted) setStates((current) => ({ ...current, sensors: current.sensors === "loading" ? "error" : current.sensors }));
       } finally {
@@ -237,8 +303,9 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
         setAsset(loadedAsset);
         setAssetState("ready");
 
-        const [sensorsResult, analysesResult, alertsResult, maintenanceResult] = await Promise.allSettled([
+        const [sensorsResult, assessmentsResult, analysesResult, alertsResult, maintenanceResult] = await Promise.allSettled([
           getSensors(assetId),
+          getConditionAssessments(assetId),
           getAIAnalyses(assetId),
           getAlerts(assetId),
           getMaintenanceRecords(assetId),
@@ -250,8 +317,8 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
         }));
         if (!mounted) return;
         lastSensorSnapshots = sensorSnapshots;
-        setData({ loading: false, sensors: sensorSnapshots, analyses: analysesResult.status === "fulfilled" ? analysesResult.value : [], alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [], maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : [] });
-        setStates({ sensors: sensorsResult.status === "fulfilled" ? "ready" : "error", ai: analysesResult.status === "fulfilled" ? "ready" : "error", alerts: alertsResult.status === "fulfilled" ? "ready" : "error", maintenance: maintenanceResult.status === "fulfilled" ? "ready" : "error" });
+        setData({ loading: false, sensors: sensorSnapshots, assessments: assessmentsResult.status === "fulfilled" ? assessmentsResult.value : [], analyses: analysesResult.status === "fulfilled" ? analysesResult.value : [], alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [], maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : [] });
+        setStates({ sensors: sensorsResult.status === "fulfilled" ? "ready" : "error", condition: assessmentsResult.status === "fulfilled" ? "ready" : "error", ai: analysesResult.status === "fulfilled" ? "ready" : "error", alerts: alertsResult.status === "fulfilled" ? "ready" : "error", maintenance: maintenanceResult.status === "fulfilled" ? "ready" : "error" });
         if (sensorsResult.status === "fulfilled") setLastUpdated(new Date());
       } catch {
         if (mounted) setAssetState("error");
@@ -266,5 +333,5 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   if (assetState === "loading") return <AssetDetailSkeleton />;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
-  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} lastUpdated={lastUpdated} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
+  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} lastUpdated={lastUpdated} /><ConditionSection state={states.condition} assessments={data.assessments} assetId={asset.id} onAssessment={addAssessment} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
 }

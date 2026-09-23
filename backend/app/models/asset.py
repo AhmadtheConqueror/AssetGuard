@@ -32,3 +32,4 @@ class Asset(Base):
     ai_analyses: Mapped[list[AIAnalysis]] = relationship(back_populates="asset")
     alerts: Mapped[list[Alert]] = relationship(back_populates="asset")
     maintenance_records: Mapped[list[MaintenanceRecord]] = relationship(back_populates="asset")
+    condition_assessments: Mapped[list[ConditionAssessment]] = relationship(back_populates="asset")

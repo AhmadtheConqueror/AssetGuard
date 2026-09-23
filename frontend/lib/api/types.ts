@@ -87,6 +87,34 @@ export interface AIAnalysisFindings {
   provider_execution?: Record<string, unknown>;
 }
 
+export type ConditionStatus = "insufficient_data" | "normal" | "watch" | "anomalous";
+
+export interface ConditionFinding {
+  sensor_id: string;
+  sensor_name: string;
+  sensor_type: string;
+  unit: string;
+  latest_value: number | null;
+  baseline_value: number | null;
+  deviation_score: number | null;
+  recent_change: number | null;
+  trend_direction: "increasing" | "decreasing" | "stable";
+  trend_strength: number | null;
+  finding_status: ConditionStatus;
+  explanation: string;
+}
+
+export interface ConditionAssessment {
+  id: string;
+  asset_id: string;
+  evaluated_at: string;
+  evaluated_through: string;
+  status: ConditionStatus;
+  summary: string;
+  findings: ConditionFinding[];
+  created_at: string;
+}
+
 export interface Sensor {
   id: string;
   asset_id: string;
