@@ -10,6 +10,8 @@ import {
 } from "@/lib/api/client";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDateTime } from "@/lib/format";
+import { useSession } from "@/lib/auth/SessionContext";
+import { hasPermission, PERMISSION_DENIED_MESSAGE } from "@/lib/auth/permissions";
 import type { Alert, AlertCreateInput, AlertResolveInput, Asset } from "@/lib/api/types";
 
 type AlertAction = "acknowledging" | "resolving" | "saving";
@@ -17,6 +19,7 @@ type AlertAction = "acknowledging" | "resolving" | "saving";
 export function alertErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     if (error.status === 404) return "This alert or asset no longer exists.";
+    if (error.status === 403) return PERMISSION_DENIED_MESSAGE;
     if (error.status === 409) return error.message || "The alert has changed. Refresh and try again.";
     if (error.status === 422) return error.message || "Check the alert details and try again.";
     return error.message || fallback;
@@ -36,12 +39,16 @@ export function AlertList({
   showAsset?: boolean;
   onAlertChange?: (alert: Alert) => void;
 }) {
+  const { user } = useSession();
   const [actions, setActions] = useState<Record<string, AlertAction | undefined>>({});
   const [notes, setNotes] = useState<Record<string, string>>(() => Object.fromEntries(alerts.map((alert) => [alert.id, alert.engineer_notes ?? ""])));
   const [editingNotes, setEditingNotes] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [successes, setSuccesses] = useState<Record<string, string | undefined>>({});
   const assetById = new Map(assets.map((asset) => [asset.id, asset]));
+  const canEditAlert = hasPermission(user, "editAlert");
+  const canAcknowledgeAlert = hasPermission(user, "acknowledgeAlert");
+  const canResolveAlert = hasPermission(user, "resolveAlert");
 
   function replaceAlert(alert: Alert) {
     setNotes((current) => ({ ...current, [alert.id]: alert.engineer_notes ?? "" }));
@@ -71,16 +78,18 @@ export function AlertList({
   return <div className="alert-record-list">{alerts.map((alert) => {
     const asset = assetById.get(alert.asset_id);
     const action = actions[alert.id];
-    const isEditing = editingNotes[alert.id] === true;
+    const isEditing = canEditAlert && editingNotes[alert.id] === true;
     const canResolve = alert.status === "open" || alert.status === "acknowledged";
+    const showAcknowledge = canAcknowledgeAlert && alert.status === "open";
+    const showResolve = canResolveAlert && canResolve;
 
     return <article className="alert-record" key={alert.id}>
       <div className="alert-record-heading"><div><h3>{alert.title}</h3>{showAsset && asset && <p className="alert-asset-link">{asset.name} · {asset.asset_code}</p>}</div><div className="alert-badge-group"><StatusBadge value={alert.severity} kind="severity" /><StatusBadge value={alert.status} /></div></div>
       <div className="alert-record-body"><p>{alert.description || "No description provided."}</p><dl className="alert-record-facts"><div><dt>Detected</dt><dd>{formatDateTime(alert.detected_at)}</dd></div>{alert.acknowledged_at && <div><dt>Acknowledged</dt><dd>{formatDateTime(alert.acknowledged_at)}</dd></div>}{alert.resolved_at && <div><dt>Resolved</dt><dd>{formatDateTime(alert.resolved_at)}</dd></div>}</dl></div>
-      <div className="alert-notes-area"><div className="alert-notes-heading"><span>Engineer notes</span>{!isEditing && <button type="button" className="text-button" onClick={() => setEditingNotes((current) => ({ ...current, [alert.id]: true }))}>{alert.engineer_notes ? "Edit" : "Add notes"}</button>}</div>{isEditing ? <div className="notes-editor"><textarea value={notes[alert.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [alert.id]: event.target.value }))} rows={2} placeholder="Add context for the next engineer" /><div className="notes-editor-actions"><button type="button" className="quiet-button" onClick={() => { setNotes((current) => ({ ...current, [alert.id]: alert.engineer_notes ?? "" })); setEditingNotes((current) => ({ ...current, [alert.id]: false })); }}>Cancel</button><button type="button" className="primary-small-button" disabled={action === "saving"} onClick={() => void saveNotes(alert)}>{action === "saving" ? "Saving..." : "Save notes"}</button></div></div> : <p className={alert.engineer_notes ? "alert-notes" : "alert-notes-empty"}>{alert.engineer_notes || "No engineer notes added."}</p>}</div>
+      <div className="alert-notes-area"><div className="alert-notes-heading"><span>Engineer notes</span>{canEditAlert && !isEditing && <button type="button" className="text-button" onClick={() => setEditingNotes((current) => ({ ...current, [alert.id]: true }))}>{alert.engineer_notes ? "Edit" : "Add notes"}</button>}</div>{isEditing ? <div className="notes-editor"><textarea value={notes[alert.id] ?? ""} onChange={(event) => setNotes((current) => ({ ...current, [alert.id]: event.target.value }))} rows={2} placeholder="Add context for the next engineer" /><div className="notes-editor-actions"><button type="button" className="quiet-button" onClick={() => { setNotes((current) => ({ ...current, [alert.id]: alert.engineer_notes ?? "" })); setEditingNotes((current) => ({ ...current, [alert.id]: false })); }}>Cancel</button><button type="button" className="primary-small-button" disabled={action === "saving"} onClick={() => void saveNotes(alert)}>{action === "saving" ? "Saving..." : "Save notes"}</button></div></div> : <p className={alert.engineer_notes ? "alert-notes" : "alert-notes-empty"}>{alert.engineer_notes || "No engineer notes added."}</p>}</div>
       {errors[alert.id] && <p className="alert-action-error" role="alert">{errors[alert.id]}</p>}
       {successes[alert.id] && <p className="action-success" role="status">{successes[alert.id]}</p>}
-      {(alert.status === "open" || canResolve) && <div className="alert-actions">{alert.status === "open" && <button type="button" className="quiet-button" disabled={Boolean(action)} onClick={() => void runAction(alert, "acknowledging", () => acknowledgeAlert(alert.id))}>{action === "acknowledging" ? "Acknowledging..." : "Acknowledge"}</button>}{canResolve && <button type="button" className="primary-small-button" disabled={Boolean(action)} onClick={() => void runAction(alert, "resolving", () => { const input: AlertResolveInput = { engineer_notes: notes[alert.id] ?? "" }; return resolveAlert(alert.id, input); })}>{action === "resolving" ? "Resolving..." : "Resolve"}</button>}</div>}
+      {(showAcknowledge || showResolve) && <div className="alert-actions">{showAcknowledge && <button type="button" className="quiet-button" disabled={Boolean(action)} onClick={() => void runAction(alert, "acknowledging", () => acknowledgeAlert(alert.id))}>{action === "acknowledging" ? "Acknowledging..." : "Acknowledge"}</button>}{showResolve && <button type="button" className="primary-small-button" disabled={Boolean(action)} onClick={() => void runAction(alert, "resolving", () => { const input: AlertResolveInput = { engineer_notes: notes[alert.id] ?? "" }; return resolveAlert(alert.id, input); })}>{action === "resolving" ? "Resolving..." : "Resolve"}</button>}</div>}
     </article>;
   })}</div>;
 }

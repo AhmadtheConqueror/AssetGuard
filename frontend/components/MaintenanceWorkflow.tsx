@@ -11,6 +11,8 @@ import {
 } from "@/lib/api/client";
 import { StatusBadge } from "@/components/StatusBadge";
 import { formatDateTime } from "@/lib/format";
+import { useSession } from "@/lib/auth/SessionContext";
+import { hasPermission, PERMISSION_DENIED_MESSAGE } from "@/lib/auth/permissions";
 import type {
   Asset,
   MaintenanceCancelInput,
@@ -64,6 +66,7 @@ function fromDateTimeLocalValue(value: string) {
 export function maintenanceErrorMessage(error: unknown, fallback: string) {
   if (error instanceof ApiError) {
     if (error.status === 404) return "This maintenance record or asset no longer exists.";
+    if (error.status === 403) return PERMISSION_DENIED_MESSAGE;
     if (error.status === 409) return "This maintenance action is not allowed in the current workflow state.";
     if (error.status === 422) return "The submitted maintenance information is invalid.";
     return error.message || fallback;
@@ -83,7 +86,7 @@ export function MaintenanceEmptyState({
   onSchedule?: () => void;
   canSchedule?: boolean;
 }) {
-  return <div className="maintenance-empty-state"><div><strong>{hasRecords ? "No matching maintenance records." : "No maintenance records."}</strong><p>{hasRecords ? "Adjust the filters to see other reliability work." : "Schedule planned work when an asset needs inspection, service, or repair."}</p></div>{!hasRecords && onSchedule && <button type="button" className="primary-small-button" disabled={!canSchedule} onClick={onSchedule}>Schedule Maintenance</button>}</div>;
+  return <div className="maintenance-empty-state"><div><strong>{hasRecords ? "No matching maintenance records." : "No maintenance records."}</strong><p>{hasRecords ? "Adjust the filters to see other reliability work." : "No maintenance work has been recorded yet."}</p></div>{!hasRecords && onSchedule && canSchedule && <button type="button" className="primary-small-button" onClick={onSchedule}>Schedule Maintenance</button>}</div>;
 }
 
 export function CreateMaintenanceForm({
@@ -263,11 +266,16 @@ export function MaintenanceRecordList({
   showAsset?: boolean;
   onRecordChange?: (record: MaintenanceRecord) => void;
 }) {
+  const { user } = useSession();
   const [actions, setActions] = useState<Record<string, RecordAction | undefined>>({});
   const [panels, setPanels] = useState<Record<string, ActivePanel | undefined>>({});
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
   const [successes, setSuccesses] = useState<Record<string, string | undefined>>({});
   const assetById = useMemo(() => new Map(assets.map((asset) => [asset.id, asset])), [assets]);
+  const canEditMaintenance = hasPermission(user, "editMaintenance");
+  const canStartMaintenance = hasPermission(user, "startMaintenance");
+  const canCompleteMaintenance = hasPermission(user, "completeMaintenance");
+  const canCancelMaintenance = hasPermission(user, "cancelMaintenance");
 
   function closePanel(recordId: string) {
     setPanels((current) => ({ ...current, [recordId]: undefined }));
@@ -299,9 +307,10 @@ export function MaintenanceRecordList({
         const asset = assetById.get(record.asset_id);
         const action = actions[record.id];
         const activePanel = panels[record.id];
-        const canStart = record.status === "planned";
-        const canComplete = record.status === "in_progress";
-        const canCancel = record.status === "planned" || record.status === "in_progress";
+        const canStart = canStartMaintenance && record.status === "planned";
+        const canComplete = canCompleteMaintenance && record.status === "in_progress";
+        const canCancel = canCancelMaintenance && (record.status === "planned" || record.status === "in_progress");
+        const hasActions = canEditMaintenance || canStart || canComplete || canCancel;
 
         return (
           <article className="maintenance-record" key={record.id}>
@@ -321,18 +330,20 @@ export function MaintenanceRecordList({
             {errors[record.id] && <p className="alert-action-error" role="alert">{errors[record.id]}</p>}
             {successes[record.id] && <p className="action-success" role="status">{successes[record.id]}</p>}
 
-            <div className="maintenance-actions">
-              <button
-                type="button"
-                className="quiet-button"
-                disabled={Boolean(action)}
-                onClick={() => setPanels((current) => ({
-                  ...current,
-                  [record.id]: current[record.id] === "edit" ? undefined : "edit",
-                }))}
-              >
-                Edit Details
-              </button>
+            {hasActions && <div className="maintenance-actions">
+              {canEditMaintenance && (
+                <button
+                  type="button"
+                  className="quiet-button"
+                  disabled={Boolean(action)}
+                  onClick={() => setPanels((current) => ({
+                    ...current,
+                    [record.id]: current[record.id] === "edit" ? undefined : "edit",
+                  }))}
+                >
+                  Edit Details
+                </button>
+              )}
               {canStart && (
                 <button
                   type="button"
@@ -372,9 +383,9 @@ export function MaintenanceRecordList({
                   Cancel Maintenance
                 </button>
               )}
-            </div>
+            </div>}
 
-            {activePanel === "edit" && (
+            {activePanel === "edit" && canEditMaintenance && (
               <EditRecordPanel
                 record={record}
                 action={action}
@@ -382,7 +393,7 @@ export function MaintenanceRecordList({
                 onSave={(input) => runAction(record, "saving", () => updateMaintenanceRecord(record.id, input))}
               />
             )}
-            {activePanel === "start" && (
+            {activePanel === "start" && canStart && (
               <StartPanel
                 record={record}
                 action={action}
@@ -390,7 +401,7 @@ export function MaintenanceRecordList({
                 onStart={(input) => runAction(record, "starting", () => startMaintenance(record.id, input))}
               />
             )}
-            {activePanel === "complete" && (
+            {activePanel === "complete" && canComplete && (
               <CompletePanel
                 record={record}
                 action={action}
@@ -398,7 +409,7 @@ export function MaintenanceRecordList({
                 onComplete={(input) => runAction(record, "completing", () => completeMaintenance(record.id, input))}
               />
             )}
-            {activePanel === "cancel" && (
+            {activePanel === "cancel" && canCancel && (
               <CancelPanel
                 record={record}
                 action={action}

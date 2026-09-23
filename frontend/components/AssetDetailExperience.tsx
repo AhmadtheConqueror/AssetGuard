@@ -19,6 +19,8 @@ import { AssetDetailSkeleton, RecordSkeletons, SectionSkeleton } from "@/compone
 import { formatDateTime, formatSensorValue as formatValue } from "@/lib/format";
 import { AlertList } from "@/components/AlertWorkflow";
 import { CreateMaintenanceForm, MaintenanceEmptyState, MaintenanceRecordList } from "@/components/MaintenanceWorkflow";
+import { useSession } from "@/lib/auth/SessionContext";
+import { hasPermission, PERMISSION_DENIED_MESSAGE } from "@/lib/auth/permissions";
 import type {
   AIAnalysis,
   AIAnalysisFindings,
@@ -117,9 +119,11 @@ function TelemetrySection({ state, sensors }: { state: LoadState; sensors: Senso
 }
 
 function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: LoadState; analyses: AIAnalysis[]; assetId: string; onAnalysisCreated: (analysis: AIAnalysis) => void }) {
+  const { user } = useSession();
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<{ title: string; detail: string } | null>(null);
   const [runSuccess, setRunSuccess] = useState(false);
+  const canRunAnalysis = hasPermission(user, "runAIAnalysis");
 
   async function runAnalysis() {
     setIsRunning(true);
@@ -130,7 +134,9 @@ function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: Loa
       onAnalysisCreated(analysis);
       setRunSuccess(true);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 503) {
+      if (error instanceof ApiError && error.status === 403) {
+        setRunError({ title: "Permission required", detail: PERMISSION_DENIED_MESSAGE });
+      } else if (error instanceof ApiError && error.status === 503) {
         setRunError({ title: "AI analysis is temporarily unavailable", detail: "The analysis service could not complete this request. Existing history remains available; try again later." });
       } else if (error instanceof ApiError && error.status === 422) {
         setRunError({ title: "More telemetry is needed", detail: error.message });
@@ -142,7 +148,7 @@ function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: Loa
     }
   }
 
-  return <section id="ai-analysis" className="detail-section-block" aria-labelledby="ai-title"><div className="detail-section-heading"><div><p className="section-kicker">Telemetry assessment</p><h3 id="ai-title">AI Analysis</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{analyses.length} recorded</span>{state === "ready" && <button type="button" className="primary-small-button" onClick={() => void runAnalysis()} disabled={isRunning}>{isRunning ? "Running Analysis..." : "Run AI Analysis"}</button>}</div></div>{runSuccess && <div className="analysis-run-notice analysis-run-success" role="status"><strong>Analysis complete</strong><span>The latest result has been added to the history below.</span></div>}{runError && <div className="analysis-run-notice analysis-run-error" role="alert"><strong>{runError.title}</strong><span>{runError.detail}</span></div>}{state === "loading" && <SectionState title="Loading analysis history" detail="Checking for previously stored analyses." />}{state === "error" && <SectionState title="Analysis history unavailable" detail="The AI analysis history could not be retrieved." error />}{state === "ready" && analyses.length === 0 && <SectionState title="No AI analysis available yet" detail="Run an analysis to assess the latest stored telemetry for this asset." />}{state === "ready" && analyses.length > 0 && <div className="analysis-list">{analyses.map((analysis) => <AnalysisCard analysis={analysis} key={analysis.id} />)}</div>}</section>;
+  return <section id="ai-analysis" className="detail-section-block" aria-labelledby="ai-title"><div className="detail-section-heading"><div><p className="section-kicker">Telemetry assessment</p><h3 id="ai-title">AI Analysis</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{analyses.length} recorded</span>{state === "ready" && canRunAnalysis && <button type="button" className="primary-small-button" onClick={() => void runAnalysis()} disabled={isRunning}>{isRunning ? "Running Analysis..." : "Run AI Analysis"}</button>}</div></div>{runSuccess && <div className="analysis-run-notice analysis-run-success" role="status"><strong>Analysis complete</strong><span>The latest result has been added to the history below.</span></div>}{runError && <div className="analysis-run-notice analysis-run-error" role="alert"><strong>{runError.title}</strong><span>{runError.detail}</span></div>}{state === "loading" && <SectionState title="Loading analysis history" detail="Checking for previously stored analyses." />}{state === "error" && <SectionState title="Analysis history unavailable" detail="The AI analysis history could not be retrieved." error />}{state === "ready" && analyses.length === 0 && <SectionState title="No AI analysis available yet" detail={canRunAnalysis ? "Run an analysis to assess the latest stored telemetry for this asset." : "No AI analysis has been recorded for this asset."} />}{state === "ready" && analyses.length > 0 && <div className="analysis-list">{analyses.map((analysis) => <AnalysisCard analysis={analysis} key={analysis.id} />)}</div>}</section>;
 }
 
 function AlertsSection({ state, alerts, asset, onAlertChange }: { state: LoadState; alerts: Alert[]; asset: Asset; onAlertChange: (alert: Alert) => void }) {
@@ -162,9 +168,11 @@ function MaintenanceSection({
   onRecordChange: (record: MaintenanceRecord) => void;
   onRecordCreated: (record: MaintenanceRecord) => void;
 }) {
+  const { user } = useSession();
   const [isScheduling, setIsScheduling] = useState(false);
+  const canCreateMaintenance = hasPermission(user, "createMaintenance");
 
-  return <section id="maintenance" className="detail-section-block" aria-labelledby="maintenance-title"><div className="detail-section-heading"><div><p className="section-kicker">Reliability history</p><h3 id="maintenance-title">Maintenance</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{records.length} recorded</span>{state === "ready" && <button type="button" className="primary-small-button" onClick={() => setIsScheduling((current) => !current)}>{isScheduling ? "Close Scheduler" : "Schedule Maintenance"}</button>}</div></div>{state === "loading" && <SectionState title="Loading maintenance history" detail="Fetching maintenance records for this asset." />}{state === "error" && <SectionState title="Maintenance unavailable" detail="The maintenance history could not be retrieved." error />}{state === "ready" && isScheduling && <CreateMaintenanceForm assets={[asset]} defaultAssetId={asset.id} lockAsset onCreated={(record) => { onRecordCreated(record); setIsScheduling(false); }} onCancel={() => setIsScheduling(false)} />}{state === "ready" && records.length === 0 && !isScheduling && <MaintenanceEmptyState hasRecords={false} onSchedule={() => setIsScheduling(true)} />}{state === "ready" && records.length > 0 && <MaintenanceRecordList records={records} assets={[asset]} showAsset={false} onRecordChange={onRecordChange} />}</section>;
+  return <section id="maintenance" className="detail-section-block" aria-labelledby="maintenance-title"><div className="detail-section-heading"><div><p className="section-kicker">Reliability history</p><h3 id="maintenance-title">Maintenance</h3></div><div className="detail-heading-actions"><span className="detail-section-meta">{records.length} recorded</span>{state === "ready" && canCreateMaintenance && <button type="button" className="primary-small-button" onClick={() => setIsScheduling((current) => !current)}>{isScheduling ? "Close Scheduler" : "Schedule Maintenance"}</button>}</div></div>{state === "loading" && <SectionState title="Loading maintenance history" detail="Fetching maintenance records for this asset." />}{state === "error" && <SectionState title="Maintenance unavailable" detail="The maintenance history could not be retrieved." error />}{state === "ready" && isScheduling && canCreateMaintenance && <CreateMaintenanceForm assets={[asset]} defaultAssetId={asset.id} lockAsset onCreated={(record) => { onRecordCreated(record); setIsScheduling(false); }} onCancel={() => setIsScheduling(false)} />}{state === "ready" && records.length === 0 && !isScheduling && <MaintenanceEmptyState hasRecords={false} canSchedule={canCreateMaintenance} onSchedule={canCreateMaintenance ? () => setIsScheduling(true) : undefined} />}{state === "ready" && records.length > 0 && <MaintenanceRecordList records={records} assets={[asset]} showAsset={false} onRecordChange={onRecordChange} />}</section>;
 }
 
 export function AssetDetailExperience({ assetId }: { assetId: string }) {

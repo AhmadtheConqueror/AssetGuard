@@ -1,4 +1,32 @@
+import type { UserRole } from "@/lib/auth/types";
+
+export type { UserRole } from "@/lib/auth/types";
+
 export type AssetStatus = "active" | "inactive" | "decommissioned" | string;
+
+export interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  is_active: boolean;
+  last_login_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserCreateInput {
+  email: string;
+  full_name: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UserUpdateInput {
+  full_name?: string;
+  role?: UserRole;
+  is_active?: boolean;
+}
 
 export interface Asset {
   id: string;

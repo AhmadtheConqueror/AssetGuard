@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { COOKIE_NAME } from "@/lib/auth/session";
 
-const PROTECTED_PATHS = ["/", "/assets", "/alerts", "/maintenance"];
+const PROTECTED_PATHS = ["/", "/assets", "/alerts", "/maintenance", "/admin"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PATHS.some(

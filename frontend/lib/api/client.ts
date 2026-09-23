@@ -15,6 +15,9 @@ import type {
   MaintenanceUpdateInput,
   Sensor,
   SensorReading,
+  User,
+  UserCreateInput,
+  UserUpdateInput,
 } from "./types";
 
 /**
@@ -61,6 +64,14 @@ export function getHealth() {
 
 export function getAssets() {
   return getJson<Asset[]>("/api/assets");
+}
+
+export function getUsers() {
+  return getJson<User[]>("/api/users");
+}
+
+export function getUser(userId: string) {
+  return getJson<User>(`/api/users/${userId}`);
 }
 
 export function getAsset(assetId: string) {
@@ -147,6 +158,14 @@ async function requestJson<T>(path: string, method: "POST" | "PATCH", body: unkn
 
 export function createAlert(assetId: string, input: AlertCreateInput) {
   return requestJson<Alert>(`/api/assets/${assetId}/alerts`, "POST", input);
+}
+
+export function createUser(input: UserCreateInput) {
+  return requestJson<User>("/api/users", "POST", input);
+}
+
+export function updateUser(userId: string, input: UserUpdateInput) {
+  return requestJson<User>(`/api/users/${userId}`, "PATCH", input);
 }
 
 export function updateAlert(alertId: string, input: AlertUpdateInput) {

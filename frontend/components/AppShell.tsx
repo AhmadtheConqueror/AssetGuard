@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getHealth } from "@/lib/api/client";
 import { useSession } from "@/lib/auth/SessionContext";
+import { hasPermission } from "@/lib/auth/permissions";
 
 type HealthState = "checking" | "connected" | "unavailable";
 
@@ -15,11 +16,16 @@ const navigation = [
   { href: "/maintenance", label: "Maintenance", marker: "04" },
 ];
 
+const adminNavigation = [
+  { href: "/admin/users", label: "Users", marker: "05" },
+];
+
 const pageMeta: Record<string, { eyebrow: string; title: string; description: string }> = {
   "/": { eyebrow: "Control room", title: "Operations overview", description: "A clear starting point for asset reliability work." },
   "/assets": { eyebrow: "Asset register", title: "Assets", description: "Browse the equipment connected to AssetGuard." },
   "/alerts": { eyebrow: "Signal review", title: "Alerts", description: "A focused space for reliability signals and triage." },
   "/maintenance": { eyebrow: "Reliability work", title: "Maintenance", description: "Plan and review work across the asset estate." },
+  "/admin/users": { eyebrow: "User administration", title: "Users", description: "Manage AssetGuard accounts and operational roles." },
 };
 
 function getPageMeta(pathname: string) {
@@ -67,8 +73,10 @@ function UserBlock() {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user } = useSession();
   const [healthState, setHealthState] = useState<HealthState>("checking");
   const meta = getPageMeta(pathname);
+  const visibleNavigation = hasPermission(user, "administerUsers") ? [...navigation, ...adminNavigation] : navigation;
 
   useEffect(() => {
     let mounted = true;
@@ -97,7 +105,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <div className="nav-section-label">Workspace</div>
         <nav className="primary-nav" aria-label="Primary navigation">
-          {navigation.map((item) => {
+          {visibleNavigation.map((item) => {
             const isActive = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 
             return (
