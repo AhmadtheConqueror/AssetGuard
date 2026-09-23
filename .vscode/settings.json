@@ -1,8 +1,0 @@
-{
-    "chat.tools.terminal.autoApprove": {
-        "/^python -m compileall app; python -c \"from app\\.main import app; paths = \\{route\\.path for route in app\\.routes\\}; expected = \\{'/api/assets/\\{asset_id\\}/maintenance-records', '/api/maintenance-records/\\{record_id\\}', '/api/maintenance-records/\\{record_id\\}/start', '/api/maintenance-records/\\{record_id\\}/complete', '/api/maintenance-records/\\{record_id\\}/cancel'\\}; assert expected <= paths, paths; print\\('maintenance routes:', sorted\\(path for path in paths if 'maintenance' in path\\)\\)\"$/": {
-            "approve": true,
-            "matchCommandLine": true
-        }
-    }
-}

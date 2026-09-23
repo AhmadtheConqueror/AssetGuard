@@ -4,7 +4,15 @@ __pycache__/
 *.pyo
 
 # Virtual environment
-backend/.venv/
+backend/.venv*/
+
+# Python tooling
+backend/.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor-local settings
+.vscode/
 
 # Secrets
 backend/.env
