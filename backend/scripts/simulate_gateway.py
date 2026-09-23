@@ -1,4 +1,5 @@
 import argparse
+import math
 import os
 import random
 import sys
@@ -30,19 +31,27 @@ DEGRADING_DRIFT = {
 }
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send synthetic condition telemetry to AssetGuard.")
     parser.add_argument("--asset-code", default="COMP-001")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--interval", type=float, default=5.0)
     parser.add_argument("--cycles", type=int, default=20)
     parser.add_argument("--scenario", choices=("normal", "degrading"), default="normal")
+    parser.add_argument(
+        "--intensity",
+        type=float,
+        default=1.0,
+        help="Scale synthetic directional degradation without changing random noise.",
+    )
     parser.add_argument("--seed", type=int)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.interval < 0:
         parser.error("--interval must be zero or greater")
     if args.cycles < 1:
         parser.error("--cycles must be at least 1")
+    if not math.isfinite(args.intensity) or args.intensity <= 0:
+        parser.error("--intensity must be a finite number greater than 0")
     return args
 
 
@@ -51,9 +60,15 @@ def sensor_kind(sensor: dict[str, Any]) -> str:
     return next((kind for kind in DEFAULT_BASELINES if kind in descriptor), "other")
 
 
-def next_value(current: float, kind: str, scenario: str, rng: random.Random) -> float:
+def next_value(
+    current: float,
+    kind: str,
+    scenario: str,
+    rng: random.Random,
+    intensity: float = 1.0,
+) -> float:
     noise = NORMAL_NOISE.get(kind, max(abs(current) * 0.002, 0.02))
-    drift = DEGRADING_DRIFT.get(kind, 0.0) if scenario == "degrading" else 0.0
+    drift = DEGRADING_DRIFT.get(kind, 0.0) * intensity if scenario == "degrading" else 0.0
     return round(current + drift + rng.uniform(-noise, noise), 4)
 
 
@@ -83,9 +98,10 @@ def run(args: argparse.Namespace) -> int:
                 else DEFAULT_BASELINES.get(sensor_kind(sensor), 0.0)
                 for sensor in sensors
             }
+            intensity_label = f", intensity {args.intensity:g}" if args.intensity != 1.0 else ""
             print(
                 f"Simulating {args.scenario} telemetry for {discovery['asset']['asset_code']} "
-                f"({len(sensors)} sensors, {args.cycles} cycles)."
+                f"({len(sensors)} sensors, {args.cycles} cycles{intensity_label})."
             )
 
             for cycle in range(1, args.cycles + 1):
@@ -94,7 +110,7 @@ def run(args: argparse.Namespace) -> int:
                 for sensor in sensors:
                     sensor_id = sensor["id"]
                     values[sensor_id] = next_value(
-                        values[sensor_id], sensor_kind(sensor), args.scenario, rng
+                        values[sensor_id], sensor_kind(sensor), args.scenario, rng, args.intensity
                     )
                     readings.append(
                         {

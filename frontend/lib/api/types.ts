@@ -141,6 +141,10 @@ export interface Alert {
   id: string;
   asset_id: string;
   ai_analysis_id: string | null;
+  condition_assessment_id: string | null;
+  condition_assessment_evaluated_at: string | null;
+  source: "manual" | "condition_monitoring";
+  ai_escalation_status: string | null;
   title: string;
   description: string | null;
   severity: "low" | "moderate" | "high" | "critical";

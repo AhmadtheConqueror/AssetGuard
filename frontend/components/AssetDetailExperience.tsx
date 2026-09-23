@@ -159,11 +159,13 @@ function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: Loa
 function ConditionSection({
   state,
   assessments,
+  alerts,
   assetId,
   onAssessment,
 }: {
   state: LoadState;
   assessments: ConditionAssessment[];
+  alerts: Alert[];
   assetId: string;
   onAssessment: (assessment: ConditionAssessment) => void;
 }) {
@@ -172,6 +174,8 @@ function ConditionSection({
   const [runError, setRunError] = useState<string | null>(null);
   const canRun = hasPermission(user, "runConditionAssessment");
   const latest = assessments[0] ?? null;
+  const linkedAlert = latest ? alerts.find((alert) => alert.condition_assessment_id === latest.id) : null;
+  const activeAutomaticAlert = alerts.find((alert) => alert.source === "condition_monitoring" && (alert.status === "open" || alert.status === "acknowledged"));
 
   async function runAssessment() {
     setIsRunning(true);
@@ -192,6 +196,8 @@ function ConditionSection({
   return <section id="condition-monitoring" className="detail-section-block condition-section" aria-labelledby="condition-title">
     <div className="detail-section-heading"><div><p className="section-kicker">Statistical condition signal</p><h3 id="condition-title">Condition Monitoring</h3></div><div className="detail-heading-actions">{latest && <StatusBadge value={latest.status} />}{state === "ready" && canRun && <button type="button" className="primary-small-button" onClick={() => void runAssessment()} disabled={isRunning}>{isRunning ? "Evaluating..." : latest ? "Re-evaluate" : "Run Assessment"}</button>}</div></div>
     <p className="condition-disclaimer">Statistical condition signal based on recent history. This is not an OEM safety alarm.</p>
+    {linkedAlert && <div className="condition-alert-indicator"><strong>Operational alert created</strong><span>{formatDateTime(linkedAlert.detected_at)} · {linkedAlert.status}</span></div>}
+    {!linkedAlert && latest?.status === "anomalous" && activeAutomaticAlert && <div className="condition-alert-indicator"><strong>Active operational alert already exists</strong><span>The existing human workflow remains authoritative.</span></div>}
     {runError && <div className="analysis-run-notice analysis-run-error" role="alert"><strong>Assessment unavailable</strong><span>{runError}</span></div>}
     {state === "loading" && <SectionState title="Loading condition history" detail="Fetching deterministic condition assessments." />}
     {state === "error" && <SectionState title="Condition monitoring unavailable" detail="Condition history could not be retrieved." error />}
@@ -280,9 +286,9 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
         setStates((current) => ({ ...current, sensors: "ready" }));
         setLastUpdated(new Date());
         try {
-          const assessments = await getConditionAssessments(assetId);
+          const [assessments, alerts] = await Promise.all([getConditionAssessments(assetId), getAlerts(assetId)]);
           if (mounted) {
-            setData((current) => ({ ...current, assessments }));
+            setData((current) => ({ ...current, assessments, alerts }));
             setStates((current) => ({ ...current, condition: "ready" }));
           }
         } catch {
@@ -333,5 +339,5 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   if (assetState === "loading") return <AssetDetailSkeleton />;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
-  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} lastUpdated={lastUpdated} /><ConditionSection state={states.condition} assessments={data.assessments} assetId={asset.id} onAssessment={addAssessment} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
+  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} lastUpdated={lastUpdated} /><ConditionSection state={states.condition} assessments={data.assessments} alerts={data.alerts} assetId={asset.id} onAssessment={addAssessment} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
 }

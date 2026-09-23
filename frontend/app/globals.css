@@ -280,6 +280,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .detail-not-found .detail-state { max-width: 650px; margin-top: 8px; }
 .condition-unavailable { color: #7f8e8a; font-size: 11px; }
 .condition-disclaimer { margin: -7px 0 20px; color: #758680; font-size: 12px; line-height: 1.5; }
+.condition-alert-indicator { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: -8px 0 18px; padding: 11px 13px; border-left: 3px solid #b38a3c; background: #fff9e9; color: #765f2d; font-size: 11px; }
+.condition-alert-indicator strong { color: #66501f; font-size: 12px; font-weight: 550; }
+.condition-alert-indicator span { font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; }
 .condition-summary { display: grid; grid-template-columns: max-content max-content 1fr; align-items: start; gap: 20px 30px; padding: 18px; border-left: 3px solid #78998e; background: #f5f8f6; }
 .condition-summary div { display: grid; gap: 6px; }
 .condition-summary span, .condition-finding dt { color: #82908c; font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
@@ -465,6 +468,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .record-card-heading > div { justify-content: flex-start; }
   .analysis-card-header { align-items: flex-start; flex-direction: column; }
   .condition-summary, .condition-finding dl, .condition-history > div { grid-template-columns: 1fr; }
+  .condition-alert-indicator { align-items: flex-start; flex-direction: column; }
   .condition-summary p { grid-column: auto; }
 }
 

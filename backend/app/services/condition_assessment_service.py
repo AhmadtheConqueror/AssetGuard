@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from statistics import median
 from uuid import UUID
@@ -12,6 +13,9 @@ from app.models.condition_assessment import ConditionAssessment
 from app.models.sensor import Sensor
 from app.models.sensor_reading import SensorReading
 from app.schemas.condition_assessment import ConditionFinding, ConditionStatus
+
+
+logger = logging.getLogger(__name__)
 
 
 class AssetNotFoundError(Exception):
@@ -237,6 +241,13 @@ def evaluate_asset(db: Session, asset_id: UUID) -> ConditionAssessment:
             raise
         return existing
     db.refresh(assessment)
+    try:
+        from app.services import alerting_policy_service
+
+        alerting_policy_service.process_new_assessment(db, assessment)
+    except Exception:
+        db.rollback()
+        logger.exception("Operational alert policy failed for assessment %s", assessment.id)
     return assessment
 
 

@@ -231,9 +231,9 @@ export function OperationalDashboard() {
   }, []);
 
   const totalAssets = assetSnapshots.length;
-  const activeAssets = assetSnapshots.filter(({ asset }) => asset.status === "active").length;
-  const openAlerts = assetSnapshots.reduce((total, snapshot) => total + snapshot.alerts.filter((alert) => alert.status === "open").length, 0);
-  const activeMaintenance = assetSnapshots.reduce((total, snapshot) => total + snapshot.maintenance.filter((record) => record.status === "planned" || record.status === "in_progress").length, 0);
+  const activeAlerts = assetSnapshots.reduce((total, snapshot) => total + snapshot.alerts.filter((alert) => alert.status === "open" || alert.status === "acknowledged").length, 0);
+  const watchAssets = assetSnapshots.filter(({ condition }) => condition?.status === "watch").length;
+  const anomalousAssets = assetSnapshots.filter(({ condition }) => condition?.status === "anomalous").length;
 
   return (
     <section className="content-section dashboard-section operational-dashboard">
@@ -241,9 +241,9 @@ export function OperationalDashboard() {
 
       {assetsState !== "loading" && <div className="kpi-grid" aria-label="Operational summary">
         <div className="kpi-card"><span>Total assets</span><strong>{totalAssets}</strong><small>Registered equipment</small></div>
-        <div className="kpi-card"><span>Active assets</span><strong>{activeAssets}</strong><small>Currently active</small></div>
-        <div className="kpi-card"><span>Open alerts</span><strong>{openAlerts}</strong><small>Awaiting review</small></div>
-        <div className="kpi-card"><span>Maintenance</span><strong>{activeMaintenance}</strong><small>Planned or in progress</small></div>
+        <div className="kpi-card"><span>Active alerts</span><strong>{activeAlerts}</strong><small>Open or acknowledged</small></div>
+        <div className="kpi-card"><span>Watch condition</span><strong>{watchAssets}</strong><small>Assets under observation</small></div>
+        <div className="kpi-card"><span>Anomalous condition</span><strong>{anomalousAssets}</strong><small>Assets with unusual behaviour</small></div>
       </div>}
 
       {assetsState === "loading" && <DashboardSkeleton />}

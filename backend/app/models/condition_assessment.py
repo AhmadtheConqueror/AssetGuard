@@ -36,3 +36,4 @@ class ConditionAssessment(Base):
     )
 
     asset: Mapped[Asset] = relationship(back_populates="condition_assessments")
+    alert: Mapped[Alert | None] = relationship(back_populates="condition_assessment")

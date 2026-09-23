@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     MONITORING_PERSISTENCE_RATIO: float = 0.6
     MONITORING_MIN_SCALE_RATIO: float = 0.005
     MONITORING_MIN_ABSOLUTE_SCALE: float = 0.000001
+    # Workflow sensitivity settings, not OEM alarm or equipment safety limits.
+    ALERTING_ENABLED: bool = True
+    ALERT_ANOMALOUS_ASSESSMENTS_REQUIRED: int = 2
+    ALERT_COOLDOWN_MINUTES: int = 60
+    AUTO_AI_ESCALATION_ENABLED: bool = False
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

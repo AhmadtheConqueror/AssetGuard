@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.ai_analysis import AIAnalysis
 from app.models.alert import Alert
 from app.models.asset import Asset
+from app.models.condition_assessment import ConditionAssessment
 from app.schemas.alert import AlertCreate, AlertResolveRequest, AlertSeverity, AlertStatus, AlertUpdate
 
 
@@ -43,6 +44,39 @@ def create_alert(db: Session, asset_id: UUID, alert_data: AlertCreate) -> Alert:
         detected_at=alert_data.detected_at or datetime.now(UTC),
         status="open",
         **values,
+    )
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+def create_condition_monitoring_alert(
+    db: Session,
+    assessment: ConditionAssessment,
+) -> Alert:
+    asset = db.get(Asset, assessment.asset_id)
+    if asset is None:
+        raise AssetNotFoundError
+
+    notable_findings = [
+        finding.get("sensor_name", "Sensor")
+        for finding in assessment.findings
+        if finding.get("finding_status") == "anomalous"
+    ]
+    sensor_context = ", ".join(notable_findings) if notable_findings else "asset telemetry"
+    alert = Alert(
+        asset_id=asset.id,
+        condition_assessment_id=assessment.id,
+        source="condition_monitoring",
+        title=f"Statistical condition anomaly detected - {asset.asset_code}",
+        description=(
+            f"{assessment.summary} Anomalous statistical findings: {sensor_context}. "
+            "This signal is based on recent historical behaviour, not an OEM safety limit."
+        ),
+        severity="moderate",
+        status="open",
+        detected_at=assessment.evaluated_at,
     )
     db.add(alert)
     db.commit()

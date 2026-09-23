@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 AlertSeverity = Literal["low", "moderate", "high", "critical"]
 AlertStatus = Literal["open", "acknowledged", "resolved"]
+AlertSource = Literal["manual", "condition_monitoring"]
 
 
 class AlertCreate(BaseModel):
@@ -52,6 +53,10 @@ class AlertRead(BaseModel):
     id: UUID
     asset_id: UUID
     ai_analysis_id: UUID | None
+    condition_assessment_id: UUID | None
+    condition_assessment_evaluated_at: datetime | None
+    source: AlertSource
+    ai_escalation_status: str | None
     title: str
     description: str | None
     severity: AlertSeverity
