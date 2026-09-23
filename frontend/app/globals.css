@@ -114,6 +114,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .dashboard-block-heading, .summary-panel-heading { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
 .dashboard-block-heading h2, .summary-panel-heading h2 { margin: 0; font-size: 25px; font-weight: 500; letter-spacing: -.05em; }
 .block-meta, .summary-count { color: #7f918c; font-family: var(--font-mono); font-size: 11px; }
+.live-update-meta { display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex-wrap: wrap; }
+.live-indicator { color: #347458; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: .12em; }
 .sensor-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
 .sensor-card { position: relative; min-width: 0; min-height: 168px; padding: 18px; border: 1px solid var(--line); border-top: 2px solid var(--sensor-color); background: var(--panel); }
 .sensor-card-topline { display: flex; align-items: center; gap: 7px; color: #8a9895; font-family: var(--font-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }

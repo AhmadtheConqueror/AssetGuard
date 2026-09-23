@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     AUTH_JWT_SECRET: SecretStr
     AUTH_JWT_ALGORITHM: str = "HS256"
     AUTH_ACCESS_TOKEN_MINUTES: int = 60
+    INGESTION_API_KEY: SecretStr | None = None
 
     model_config = SettingsConfigDict(
         env_file=BACKEND_DIR / ".env",

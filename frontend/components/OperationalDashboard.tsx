@@ -133,10 +133,10 @@ function SensorCard({ snapshot, colorIndex }: { snapshot: SensorSnapshot; colorI
   );
 }
 
-function AssetTelemetry({ snapshot }: { snapshot: AssetSnapshot }) {
+function AssetTelemetry({ snapshot, lastUpdated }: { snapshot: AssetSnapshot; lastUpdated: Date | null }) {
   return (
     <section className="dashboard-block telemetry-block">
-      <div className="dashboard-block-heading"><div><p className="section-kicker">Live telemetry</p><h2>Sensor readings</h2></div><span className="block-meta">{snapshot.sensors.length} sensors</span></div>
+      <div className="dashboard-block-heading"><div><p className="section-kicker">Live telemetry</p><h2>Sensor readings</h2></div><div className="live-update-meta"><span className="live-indicator">LIVE</span><span className="block-meta">{snapshot.sensors.length} sensors{lastUpdated ? ` · Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}</span></div></div>
       {snapshot.sensorsState === "loading" && <SectionMessage title="Loading telemetry" detail="Fetching sensors and recent readings from the API." />}
       {snapshot.sensorsState === "error" && <SectionMessage title="Telemetry unavailable" detail="The asset loaded, but its sensor data could not be retrieved." error />}
       {snapshot.sensorsState === "ready" && snapshot.sensors.length === 0 && <SectionMessage title="No sensors registered" detail="This asset does not have sensors connected yet." />}
@@ -163,52 +163,64 @@ function MaintenanceSummary({ snapshot }: { snapshot: AssetSnapshot }) {
 export function OperationalDashboard() {
   const [assetSnapshots, setAssetSnapshots] = useState<AssetSnapshot[]>([]);
   const [assetsState, setAssetsState] = useState<SectionState>("loading");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     let mounted = true;
+    let refreshing = false;
+    let lastSnapshots: AssetSnapshot[] = [];
 
-    async function loadDashboard() {
-      setAssetsState("loading");
+    async function loadDashboard(initial = false) {
+      if (refreshing) return;
+      refreshing = true;
+      if (initial) setAssetsState("loading");
       try {
         const assets = await getAssets();
         const snapshots = await Promise.all(assets.map(async (asset): Promise<AssetSnapshot> => {
+          const previousAsset = lastSnapshots.find((snapshot) => snapshot.asset.id === asset.id);
           const [sensorsResult, alertsResult, maintenanceResult] = await Promise.allSettled([
             getSensors(asset.id),
             getAlerts(asset.id),
             getMaintenanceRecords(asset.id),
           ]);
-          const sensors = sensorsResult.status === "fulfilled" ? sensorsResult.value : [];
+          const sensors = sensorsResult.status === "fulfilled" ? sensorsResult.value : previousAsset?.sensors.map(({ sensor }) => sensor) ?? [];
           const sensorSnapshots = await Promise.all(sensors.map(async (sensor) => {
+            const previousSensor = previousAsset?.sensors.find((snapshot) => snapshot.sensor.id === sensor.id);
             const [latestResult, readingsResult] = await Promise.allSettled([getLatestSensorReading(sensor.id), getSensorReadings(sensor.id)]);
             return {
               sensor,
-              latest: latestResult.status === "fulfilled" ? latestResult.value : null,
-              readings: readingsResult.status === "fulfilled" ? readingsResult.value : [],
+              latest: latestResult.status === "fulfilled" ? latestResult.value : previousSensor?.latest ?? null,
+              readings: readingsResult.status === "fulfilled" ? readingsResult.value : previousSensor?.readings ?? [],
             };
           }));
 
           return {
             asset,
             sensors: sensorSnapshots,
-            alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [],
-            maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : [],
-            sensorsState: sensorsResult.status === "fulfilled" ? "ready" : "error",
-            alertsState: alertsResult.status === "fulfilled" ? "ready" : "error",
-            maintenanceState: maintenanceResult.status === "fulfilled" ? "ready" : "error",
+            alerts: alertsResult.status === "fulfilled" ? alertsResult.value : previousAsset?.alerts ?? [],
+            maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : previousAsset?.maintenance ?? [],
+            sensorsState: sensorsResult.status === "fulfilled" ? "ready" : previousAsset?.sensorsState ?? "error",
+            alertsState: alertsResult.status === "fulfilled" ? "ready" : previousAsset?.alertsState ?? "error",
+            maintenanceState: maintenanceResult.status === "fulfilled" ? "ready" : previousAsset?.maintenanceState ?? "error",
           };
         }));
 
         if (mounted) {
+          lastSnapshots = snapshots;
           setAssetSnapshots(snapshots);
           setAssetsState("ready");
+          setLastUpdated(new Date());
         }
       } catch {
-        if (mounted) setAssetsState("error");
+        if (mounted && initial) setAssetsState("error");
+      } finally {
+        refreshing = false;
       }
     }
 
-    void loadDashboard();
-    return () => { mounted = false; };
+    void loadDashboard(true);
+    const interval = window.setInterval(() => void loadDashboard(), 5000);
+    return () => { mounted = false; window.clearInterval(interval); };
   }, []);
 
   const totalAssets = assetSnapshots.length;
@@ -232,7 +244,7 @@ export function OperationalDashboard() {
       {assetsState === "ready" && assetSnapshots.length === 0 && <SectionMessage title="No assets registered" detail="Add an asset through the backend before using the operational dashboard." />}
       {assetsState === "ready" && assetSnapshots.map((snapshot) => <div key={snapshot.asset.id} className="asset-dashboard-group">
         <section className="asset-overview-row"><div><p className="section-kicker">Monitored asset</p><Link href={`/assets/${snapshot.asset.id}`} className="asset-overview-link"><h2>{snapshot.asset.name}</h2><span>{snapshot.asset.asset_code}</span></Link></div><div className="asset-overview-facts"><span><b>Type</b>{snapshot.asset.asset_type}</span><span><b>Location</b>{snapshot.asset.location ?? "Not set"}</span><span><b>Status</b><StatusBadge value={snapshot.asset.status} /></span></div></section>
-        <AssetTelemetry snapshot={snapshot} />
+        <AssetTelemetry snapshot={snapshot} lastUpdated={lastUpdated} />
         <div className="summary-grid"><AlertsSummary snapshot={snapshot} /><MaintenanceSummary snapshot={snapshot} /></div>
       </div>)}
     </section>

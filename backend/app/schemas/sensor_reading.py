@@ -1,13 +1,13 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class SensorReadingCreate(BaseModel):
     recorded_at: datetime
-    value: float
-    quality: str | None = None
+    value: float = Field(allow_inf_nan=False)
+    quality: str | None = Field(default=None, max_length=50)
 
     @field_validator("recorded_at")
     @classmethod

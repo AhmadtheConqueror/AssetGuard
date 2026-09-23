@@ -2,10 +2,12 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.models.sensor_reading import SensorReading
 from app.schemas.sensor_reading import SensorReadingCreate
+from app.schemas.ingestion import IngestionReading
 
 
 def create_sensor_reading(
@@ -49,3 +51,19 @@ def get_latest_sensor_reading(db: Session, sensor_id: UUID) -> SensorReading | N
         .limit(1)
     )
     return db.scalar(statement)
+
+
+def create_sensor_readings_idempotently(
+    db: Session,
+    readings: list[IngestionReading],
+) -> tuple[int, int]:
+    values = [reading.model_dump() for reading in readings]
+    statement = (
+        insert(SensorReading)
+        .values(values)
+        .on_conflict_do_nothing(index_elements=["sensor_id", "recorded_at"])
+        .returning(SensorReading.id)
+    )
+    accepted_count = len(db.scalars(statement).all())
+    db.commit()
+    return accepted_count, len(readings) - accepted_count

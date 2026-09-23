@@ -114,8 +114,8 @@ function OverviewSection({ asset, data }: { asset: Asset; data: DetailData }) {
   return <section id="overview" className="detail-section-block" aria-labelledby="overview-title"><div className="detail-section-heading"><div><p className="section-kicker">Operational summary</p><h3 id="overview-title">{asset.name} at a glance</h3></div><StatusBadge value={asset.status} /></div><div className="overview-facts"><div><span>Total sensors</span><strong>{data.sensors.length}</strong></div><div><span>Latest telemetry</span><strong>{latestTimestamp ? formatDateTime(latestTimestamp) : "No readings"}</strong></div><div><span>Open alerts</span><strong>{openAlerts}</strong></div><div><span>Active maintenance</span><strong>{activeMaintenance}</strong></div><div><span>AI history</span><strong>{data.analyses.length > 0 ? `${data.analyses.length} analysis${data.analyses.length === 1 ? "" : "es"}` : "None yet"}</strong></div></div></section>;
 }
 
-function TelemetrySection({ state, sensors }: { state: LoadState; sensors: SensorSnapshot[] }) {
-  return <section id="telemetry" className="detail-section-block" aria-labelledby="telemetry-title"><div className="detail-section-heading"><div><p className="section-kicker">Live measurements</p><h3 id="telemetry-title">Sensors & Telemetry</h3></div><span className="detail-section-meta">{sensors.length} sensors</span></div>{state === "loading" && <SectionState title="Loading sensor telemetry" detail="Fetching sensors and recent readings." />}{state === "error" && <SectionState title="Telemetry unavailable" detail="This section could not load from the backend." error />}{state === "ready" && sensors.length === 0 && <SectionState title="No sensors registered" detail="No sensors are attached to this asset." />}{state === "ready" && sensors.length > 0 && <div className="detail-telemetry-content"><div className="detail-sensor-grid">{sensors.map(({ sensor, latest }, index) => <article className="detail-sensor-card" style={{ "--sensor-color": sensorColors[index % sensorColors.length] } as React.CSSProperties} key={sensor.id}><div className="detail-sensor-label"><span className="sensor-signal" aria-hidden="true" />{sensor.sensor_type}<StatusBadge value={sensor.status} /></div><h4>{sensor.name}</h4><strong>{formatValue(latest?.value ?? null, sensor.unit)}</strong><p>{latest ? formatDateTime(latest.recorded_at) : "No reading available"}</p>{latest?.quality && <small>Quality: {latest.quality}</small>}</article>)}</div><div className="detail-trend-grid">{sensors.map(({ sensor, readings }) => <TrendChart key={sensor.id} sensorName={sensor.name} unit={sensor.unit} readings={readings} />)}</div></div>}</section>;
+function TelemetrySection({ state, sensors, lastUpdated }: { state: LoadState; sensors: SensorSnapshot[]; lastUpdated: Date | null }) {
+  return <section id="telemetry" className="detail-section-block" aria-labelledby="telemetry-title"><div className="detail-section-heading"><div><p className="section-kicker">Live measurements</p><h3 id="telemetry-title">Sensors & Telemetry</h3></div><div className="live-update-meta"><span className="live-indicator">LIVE</span><span className="detail-section-meta">{sensors.length} sensors{lastUpdated ? ` · Last updated: ${lastUpdated.toLocaleTimeString()}` : ""}</span></div></div>{state === "loading" && <SectionState title="Loading sensor telemetry" detail="Fetching sensors and recent readings." />}{state === "error" && <SectionState title="Telemetry unavailable" detail="This section could not load from the backend." error />}{state === "ready" && sensors.length === 0 && <SectionState title="No sensors registered" detail="No sensors are attached to this asset." />}{state === "ready" && sensors.length > 0 && <div className="detail-telemetry-content"><div className="detail-sensor-grid">{sensors.map(({ sensor, latest }, index) => <article className="detail-sensor-card" style={{ "--sensor-color": sensorColors[index % sensorColors.length] } as React.CSSProperties} key={sensor.id}><div className="detail-sensor-label"><span className="sensor-signal" aria-hidden="true" />{sensor.sensor_type}<StatusBadge value={sensor.status} /></div><h4>{sensor.name}</h4><strong>{formatValue(latest?.value ?? null, sensor.unit)}</strong><p>{latest ? formatDateTime(latest.recorded_at) : "No reading available"}</p>{latest?.quality && <small>Quality: {latest.quality}</small>}</article>)}</div><div className="detail-trend-grid">{sensors.map(({ sensor, readings }) => <TrendChart key={sensor.id} sensorName={sensor.name} unit={sensor.unit} readings={readings} />)}</div></div>}</section>;
 }
 
 function AISection({ state, analyses, assetId, onAnalysisCreated }: { state: LoadState; analyses: AIAnalysis[]; assetId: string; onAnalysisCreated: (analysis: AIAnalysis) => void }) {
@@ -180,6 +180,7 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
   const [assetState, setAssetState] = useState<LoadState>("loading");
   const [data, setData] = useState<DetailData>({ loading: true, sensors: [], analyses: [], alerts: [], maintenance: [] });
   const [states, setStates] = useState({ sensors: "loading" as LoadState, ai: "loading" as LoadState, alerts: "loading" as LoadState, maintenance: "loading" as LoadState });
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   function replaceAlert(updatedAlert: Alert) {
     setData((current) => ({ ...current, alerts: current.alerts.map((alert) => alert.id === updatedAlert.id ? updatedAlert : alert) }));
@@ -199,6 +200,34 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
 
   useEffect(() => {
     let mounted = true;
+    let refreshingTelemetry = false;
+    let lastSensorSnapshots: SensorSnapshot[] = [];
+
+    async function loadTelemetry() {
+      if (refreshingTelemetry) return;
+      refreshingTelemetry = true;
+      try {
+        const sensors = await getSensors(assetId);
+        const sensorSnapshots = await Promise.all(sensors.map(async (sensor) => {
+          const previousSensor = lastSensorSnapshots.find((snapshot) => snapshot.sensor.id === sensor.id);
+          const [latestResult, readingsResult] = await Promise.allSettled([getLatestSensorReading(sensor.id), getSensorReadings(sensor.id)]);
+          return {
+            sensor,
+            latest: latestResult.status === "fulfilled" ? latestResult.value : previousSensor?.latest ?? null,
+            readings: readingsResult.status === "fulfilled" ? readingsResult.value : previousSensor?.readings ?? [],
+          };
+        }));
+        if (!mounted) return;
+        lastSensorSnapshots = sensorSnapshots;
+        setData((current) => ({ ...current, sensors: sensorSnapshots }));
+        setStates((current) => ({ ...current, sensors: "ready" }));
+        setLastUpdated(new Date());
+      } catch {
+        if (mounted) setStates((current) => ({ ...current, sensors: current.sensors === "loading" ? "error" : current.sensors }));
+      } finally {
+        refreshingTelemetry = false;
+      }
+    }
 
     async function loadAsset() {
       setAssetState("loading");
@@ -220,19 +249,22 @@ export function AssetDetailExperience({ assetId }: { assetId: string }) {
           return { sensor, latest: latestResult.status === "fulfilled" ? latestResult.value : null, readings: readingsResult.status === "fulfilled" ? readingsResult.value : [] };
         }));
         if (!mounted) return;
+        lastSensorSnapshots = sensorSnapshots;
         setData({ loading: false, sensors: sensorSnapshots, analyses: analysesResult.status === "fulfilled" ? analysesResult.value : [], alerts: alertsResult.status === "fulfilled" ? alertsResult.value : [], maintenance: maintenanceResult.status === "fulfilled" ? maintenanceResult.value : [] });
         setStates({ sensors: sensorsResult.status === "fulfilled" ? "ready" : "error", ai: analysesResult.status === "fulfilled" ? "ready" : "error", alerts: alertsResult.status === "fulfilled" ? "ready" : "error", maintenance: maintenanceResult.status === "fulfilled" ? "ready" : "error" });
+        if (sensorsResult.status === "fulfilled") setLastUpdated(new Date());
       } catch {
         if (mounted) setAssetState("error");
       }
     }
 
     void loadAsset();
-    return () => { mounted = false; };
+    const interval = window.setInterval(() => void loadTelemetry(), 5000);
+    return () => { mounted = false; window.clearInterval(interval); };
   }, [assetId]);
 
   if (assetState === "loading") return <AssetDetailSkeleton />;
   if (assetState === "error" || !asset) return <section className="content-section detail-not-found"><Link href="/assets" className="back-link">← Asset register</Link><SectionState title="Asset not found" detail="This asset could not be loaded. Check the asset ID or return to the asset register." error /></section>;
 
-  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
+  return <section className="content-section asset-detail-page"><AssetHeader asset={asset} /><SectionNav /><OverviewSection asset={asset} data={data} /><TelemetrySection state={states.sensors} sensors={data.sensors} lastUpdated={lastUpdated} /><AISection state={states.ai} analyses={data.analyses} assetId={asset.id} onAnalysisCreated={addAnalysis} /><AlertsSection state={states.alerts} alerts={data.alerts} asset={asset} onAlertChange={replaceAlert} /><MaintenanceSection state={states.maintenance} records={data.maintenance} asset={asset} onRecordChange={replaceMaintenanceRecord} onRecordCreated={addMaintenanceRecord} /></section>;
 }
